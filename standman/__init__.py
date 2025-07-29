@@ -6,7 +6,7 @@ WARNING:
 - Safeguards are in place, but they are not guaranteed to be foolproof.
 - Scope restrictions are experimental and subject to change.
 - This library has not undergone testing and is not production-proven.
-
+- Recursive functions are not supported. Behavior is undefined if a target calls itself.
 
 This module defines three distinct roles:
 
@@ -56,6 +56,12 @@ Note:
 
     It is currently unclear whether the scope restrictions are too strict or too permissive.
     This behavior is subject to change in the future as usage patterns become clearer.
+    
+    Polymorphism is untested. Subclass overrides may cause verification to fail.
+
+
+
+# NOTE: 
 
 Leak* naming means exactly what it says.
 No matter how tightly you guard it—or how nicely you dress it up—a leak is still a leak.
