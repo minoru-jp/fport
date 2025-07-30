@@ -34,7 +34,7 @@ that’s just one layer of control. What truly matters is whether
 the information being passed to `.observe()` is appropriate
 to leak in the first place.
 
-That’s the real heart of the matter.
+That’s the real heart of the matter. And honestly, that’s all there is.
 """
 
 __version__ = "0.1.0"
