@@ -1,54 +1,41 @@
+from __future__ import annotations
 
 from pathlib import Path
 from types import CodeType
-from typing import Protocol
+from typing import Any, Callable, Protocol
+
+from .policy import LeakPolicy
+from .observer import ProcessObserver
 
 
 class Anchor(Protocol):
     def observe(self, *args, **kwargs) -> None:
         ...
 
+    @property
     def policy_definer_path(self) -> Path:
         ...
-    
-    def source_module_path(self) -> Path:
-        ...
-    
-    def observed_target_function(self) -> CodeType:
-        ...
-    
-    def observer_scope_path(self) -> Path:
+
+    @property
+    def leak_policy(self) -> LeakPolicy:
         ...
 
-    def observed_target_scope_path(self) -> Path:
+    @property    
+    def process_observer(self) -> ProcessObserver | None:
         ...
     
-    def enable_burst(self, flag: bool) -> None:
+    @property
+    def observed_target_function(self) -> Callable[..., Any]:
         ...
 
-NOOP_ANCHOR_TARGET_FUNCTION_CODE = (lambda *a, **kw: '<no-op>').__code__
+    @property
+    def base_scope(self) -> Path:
+        ...
 
-class _NoOpAnchor(Anchor):
-    __slot__ = ()
-    def observe(self, *args, **kwargs) -> None:
-        pass
+class VerifiedAnchor(Anchor):
+    __slots__ = ()
 
-    def policy_definer_path(self) -> Path:
-        return Path("<no-op>")
-    
-    def source_module_path(self) -> Path:
-        return Path("<no-op>")
-    
-    def observed_target_function(self) -> CodeType:
-        return NOOP_ANCHOR_TARGET_FUNCTION_CODE
-    
-    def observer_scope_path(self) -> Path:
-        return Path("<no-op>")
+class UnverifiedAnchor(Anchor):
+    __slots__ = ()
 
-    def observed_target_scope_path(self) -> Path:
-        return Path("<no-op>")
-    
-    def enable_burst(self, flag: bool) -> None:
-        pass
 
-NOOP_ANCHOR = _NoOpAnchor()

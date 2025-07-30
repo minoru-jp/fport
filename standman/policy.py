@@ -5,12 +5,13 @@ import enum
 import inspect
 
 from pathlib import Path
+from threading import Lock
 from types import CodeType, FunctionType, TracebackType
 from typing import Any, Callable, Generic, Literal, Protocol, TypeVar, cast
 
-from .anchor import Anchor, NOOP_ANCHOR
-from .caller import get_callable_location, get_caller_code, get_caller_location, get_nth_caller_frame
-from .observer import ObserveFunction
+from .anchor import Anchor, UnverifiedAnchor, VerifiedAnchor
+from .caller import check_in_scope, get_callable_location, get_caller_code, get_caller_location, get_nth_caller_frame
+from .observer import ObserveFunction, ProcessObserver
 
 class LeakPolicy(Protocol):
     def get_leak_port(self) -> LeakPort:
@@ -18,9 +19,16 @@ class LeakPolicy(Protocol):
     
     def get_observation_port(self) -> ObservationPort:
         ...
+    
+    def get_rejected_paths(self) -> dict[Path, dict[Path, int]]:
+        ...
 
 class LeakPort(Protocol):
-    def get_anchor_verifier(self, accepted_observer_scope: Path | None = None, burst: bool = False) -> Callable[[], Anchor]:
+    def get_anchor_verifier(self, accepted_observer_scope: Path | None = None, burst: bool = False, *, deny:bool = False) -> Leakage:
+        ...
+
+class Leakage(Protocol):
+    def __call__(self, *, deny: bool) -> Anchor:
         ...
     
 class ObservationPort(Protocol):
@@ -50,7 +58,8 @@ class Session(Protocol):
 
 class SessionUnverifiedReason(enum.Enum):
     PENDING = "Execution and verification have not been performed yet"
-    DENIED = "Verification failed due to policy constraints"
+    INVALID = "Verification failed due to policy constraints"
+    DENIED = "Connection was rejected by the target"
     FAILED = "Policy verification failed due to internal error"
     def __bool__(self):
         return False
@@ -62,7 +71,10 @@ class SessionFull(Protocol):
     def get_session(self) -> Session:
         ...
     
-    def get_anchor(self) -> Anchor:
+    def get_anchor(self) -> VerifiedAnchor:
+        ...
+    
+    def get_noop_anchor(self) -> VerifiedAnchor:
         ...
     
     def get_invoker(self) -> Callable[..., Any]:
@@ -77,41 +89,21 @@ class SessionFull(Protocol):
     def set_as_verified(self) -> None:
         ...
 
-def _create_session_full(target: Callable[..., Any], anchor: Anchor) -> SessionFull:
+def _create_session_full(observer: ProcessObserver, target: Callable[..., Any], anchor_unit: tuple[VerifiedAnchor, VerifiedAnchor]) -> SessionFull:
 
     consumed = False
     unverified_reason = SessionUnverifiedReason.PENDING
 
     invocation_identifier = f"invoke{id(object())}"
 
+    lock = Lock()
+
+    running = False
+
     def function_template_code(*args, **kwargs) -> Any:
-        nonlocal consumed
-        if consumed:
-            raise RuntimeError(f"This session has already ended. id = {invocation_identifier}")
-        result = target(*args, **kwargs)
-        consumed = True
-        return result
+        return target(*args, **kwargs)
 
     template_code = function_template_code.__code__
-
-    # invoker_code = CodeType(
-    #     template_code.co_argcount,
-    #     template_code.co_posonlyargcount,
-    #     template_code.co_kwonlyargcount,
-    #     template_code.co_nlocals,
-    #     template_code.co_stacksize,
-    #     template_code.co_flags,
-    #     template_code.co_code,
-    #     template_code.co_consts,
-    #     template_code.co_names,
-    #     template_code.co_varnames,
-    #     template_code.co_filename,
-    #     invocation_identifier,
-    #     template_code.co_firstlineno,
-    #     template_code.co_lnotab,
-    #     template_code.co_freevars,
-    #     template_code.co_cellvars
-    # )
 
     invoker_code = CodeType(
         template_code.co_argcount,
@@ -157,10 +149,13 @@ def _create_session_full(target: Callable[..., Any], anchor: Anchor) -> SessionF
             return str(verified)
 
         def __enter__(self) -> Callable[..., Any]:
+            if consumed:
+                raise RuntimeError(f"This session has already ended. id = {invocation_identifier}")
             return invoker
 
         def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
-            pass
+            nonlocal consumed
+            consumed = True
 
         def get_invocation_identifier(self) -> str:
             return invocation_identifier
@@ -169,11 +164,19 @@ def _create_session_full(target: Callable[..., Any], anchor: Anchor) -> SessionF
 
     class _Interface(SessionFull):
         __slots__ = ()
+        @property
+        def running(self):
+            with lock:
+                return running
+        
         def get_session(self) -> Session:
             return session
         
-        def get_anchor(self) -> Anchor:
-            return anchor
+        def get_anchor(self) -> VerifiedAnchor:
+            return anchor_unit[0]
+        
+        def get_noop_anchor(self) -> VerifiedAnchor:
+            return anchor_unit[1]
         
         def get_invoker(self) -> Callable[..., Any]:
             return invoker
@@ -191,68 +194,126 @@ def _create_session_full(target: Callable[..., Any], anchor: Anchor) -> SessionF
         
     return _Interface()
 
+def _create_verified_anchor_unit(
+        observe_function: Callable[..., Any],
+        policy_definer_location: Path,
+        leak_policy: LeakPolicy,
+        base_scope: Path,
+        observer: ProcessObserver,
+        target: Callable[..., Any],
+) -> tuple[VerifiedAnchor, VerifiedAnchor]:
+
+    class _Anchor(VerifiedAnchor):
+        __slots__ = ()
+        def observe(self, *args, **kwargs) -> None:
+            try:
+                observe_function(*args, **kwargs)
+            except Exception:
+                pass
+        @property
+        def policy_definer_path(self) -> Path:
+            return policy_definer_location
+        @property
+        def leak_policy(self) -> LeakPolicy:
+            return leak_policy
+        @property
+        def base_scope(self) -> Path:
+            return base_scope
+        @property
+        def process_observer(self) -> ProcessObserver:
+            return observer
+        @property
+        def observed_target_function(self) -> Callable[..., Any]:
+            return target
+
+    class _NoOpAnchor(VerifiedAnchor):
+        __slots__ = ()
+        def observe(self, *args, **kwargs) -> None:
+            pass
+        
+        @property
+        def policy_definer_path(self) -> Path:
+            return policy_definer_location
+        @property
+        def leak_policy(self) -> LeakPolicy:
+            return leak_policy
+        @property
+        def base_scope(self) -> Path:
+            return base_scope
+        @property
+        def process_observer(self) -> ProcessObserver:
+            return observer
+        @property
+        def observed_target_function(self) -> Callable[..., Any]:
+            return target
+    
+    return (_Anchor(), _NoOpAnchor())
 
 
-def create_leak_policy(observer_scope: Path | None = None, target_scope: Path | None = None) -> LeakPolicy:
+def create_leak_policy(base_scope: Path, *, deny: bool) -> LeakPolicy:
 
     policy_definer_location = get_caller_location(inspect.currentframe()).resolve(strict = True)
 
-    observer_scope_location = observer_scope.resolve(strict = True) if observer_scope else Path.cwd().resolve(strict = True)
-    target_scope_location = target_scope.resolve(strict = True) if target_scope else Path.cwd().resolve(strict = True)
+    base_scope_location = base_scope.resolve(strict = True)
+
+    registered_observers: dict[Callable, ProcessObserver] = {} # observe function: ProcessObserver
 
     unverified_sessions: dict[str, SessionFull] = {} # invocation id: SessionFull
+    verified_sessions: dict[str, SessionFull] = {}
+    injected_sessions: dict[str, SessionFull] = {}
+
+    deny_on_leak_policy = deny
+
+    MAX_REJECTED_PATHS = 10
+    rejected_paths: dict[Path, dict[Path, int]] = {} # scope: list[rejected path, attemps]
+
+    def 
+
+    class _UnverifiedAnchor(UnverifiedAnchor):
+        __slots__ = ()
+        def observe(self, *args, **kwargs) -> None:
+            pass
+        @property
+        def policy_definer_path(self) -> Path:
+            return policy_definer_location
+        @property
+        def leak_policy(self) -> LeakPolicy:
+            return leak_policy
+        @property
+        def process_observer(self) -> ProcessObserver | None:
+            return None
+        @property
+        def observed_target_function(self) -> Callable[..., Any] | None:
+            return None
+        @property
+        def base_scope(self) -> Path:
+            return base_scope_location
+    
+    NOOP_ANCHOR = _UnverifiedAnchor()
 
     class _ObservationPort(ObservationPort):
         __slots__ = ()
-        def session_entry(self, observe_function: ObserveFunction, target: Callable[..., Any]) -> Session:
-
-            if target.__code__ in unverified_sessions:
-                raise RuntimeError(
-                    f"Session already registered for this function: {target.__name__} "
-                    f"(code object id: {id(target.__code__)})"
-                )
+        def session_entry(self, observer: ProcessObserver, target: Callable[..., Any]) -> Session:
             
-            requirer_location = get_caller_location(inspect.currentframe())
-            if observer_scope_location not in requirer_location.parents:
-                raise PermissionError(f"Session request denied: caller is outside of observer scope. (caller: {requirer_location})")
-            observe_location = get_callable_location(observe_function)
-            if observer_scope_location not in observe_location.parents:
-                raise PermissionError(f"Session request denied: observe function is outside of observer scope. (observe: {observe_location})")
-            target_location = get_callable_location(target)
-            if target_scope_location not in target_location.parents:
-                raise PermissionError(f"Session request denied: target function is outside of target scope. (target: {target_location})")
+            check_in_scope(base_scope_location, get_caller_location(inspect.currentframe()))
             
-
-            burst = False
-
-            class _Anchor(Anchor):
-                def observe(self, *args, **kwargs) -> None:
-                    try:
-                        observe_function(*args, **kwargs)
-                    except Exception:
-                        if burst:
-                            raise
-                    
-                def policy_definer_path(self) -> Path:
-                    return policy_definer_location
-                
-                def enable_burst(self, flag: bool):
-                    nonlocal burst
-                    burst = flag
-    
-                def source_module_path(self) -> Path:
-                    return observe_location
-                
-                def observed_target_function(self) -> CodeType:
-                    return target.__code__
-                
-                def observer_scope_path(self) -> Path:
-                    return observer_scope_location
-
-                def observed_target_scope_path(self) -> Path:
-                    return target_scope_location
+            observe_function = observer.observe
+            check_in_scope(base_scope_location, get_callable_location(observe_function))
+            if observe_function in registered_observers:
+                raise RuntimeError(f"ProcessObserver has been already registered.")
             
-            session_full = _create_session_full(target, _Anchor())
+            check_in_scope(base_scope_location, get_callable_location(target))
+
+            anchor_unit = _create_verified_anchor_unit(
+                observe_function,
+                policy_definer_location,
+                leak_policy,
+                base_scope_location,
+                observer,
+                target,
+            )
+            
+            session_full = _create_session_full(observer, target, anchor_unit)
 
             unverified_sessions[session_full.get_invocation_identifier()] = session_full
 
@@ -260,52 +321,90 @@ def create_leak_policy(observer_scope: Path | None = None, target_scope: Path | 
     
     observation_port = _ObservationPort()
 
+    def get_session_full_with_index(inv_id: str):
+        unver = unverified_sessions.get(inv_id)
+        ver = verified_sessions.get(inv_id)
+        inj = injected_sessions.get(inv_id)
+        
+        states = [
+            ("unverified", unver),
+            ("verified", ver),
+            ("injected", inj),
+        ]
+
+        present = [(name, s) for name, s in states if s]
+        if len(present) == 1:
+            return present[0]
+        else:
+            raise RuntimeError("InternalError: session_full in multiple states")
+
+
     class _LeakPort(LeakPort):
         __slots__ = ()
-        def get_anchor_verifier(self, accepting_observer_scope: Path | None = None, burst: bool = False) -> Callable[[], Anchor]:
-
-            requirer_location = get_caller_location(inspect.currentframe())
-            if target_scope_location not in requirer_location.parents:
-                raise PermissionError(f"Leak port request denied: caller is outside of target scope. (caller: {requirer_location})")
+        def get_anchor_verifier(self, accepting_observer_scope: Path | None = None, *, deny: bool = False) -> Leakage:
             
-            if accepting_observer_scope is None:
-                accepting_observer_scope = Path.cwd().resolve()
-            accepting_observer_scope_location = accepting_observer_scope.resolve(strict = True)
-            try:
-                accepting_observer_scope_location.relative_to(observer_scope_location)
-            except ValueError:
-                raise PermissionError(f"Leak port request denied: accepted observer scope must be within the actual observer scope.\n"
-                     f"(actual observer: {observer_scope_location}, requested accepted: {accepting_observer_scope_location})")
-            
-            if accepting_observer_scope_location != policy_definer_location.parent:
-                raise PermissionError("Leak port request denied: observer scope must match policy definer's module directory")
+            deny_on_anchor_verifier = deny | deny_on_leak_policy
 
-            def leak_port() -> Anchor:
+            # check caller is in base scope
+            check_in_scope(base_scope_location, get_caller_location(inspect.currentframe()))
+
+            if accepting_observer_scope:
+                accepting_observer_scope_location = accepting_observer_scope.resolve(strict = True)
+                check_in_scope(base_scope_location, accepting_observer_scope_location)
+            
+
+            def leak_port(*, deny: bool = False) -> Anchor:
                 try:
+                    deny_on_leak_port = deny | deny_on_anchor_verifier
                     
                     f_current = inspect.currentframe()
-
                     # def target(): # target invoked invoker
                     #    anchor = get_anchor() # get_anchor called caller
 
+                    caller_location = get_caller_location(f_current)
+                    check_in_scope(base_scope_location, caller_location)
+                    
                     invoker_frame = get_nth_caller_frame(f_current, back = 2)
                     invocation_identifier = invoker_frame.f_code.co_name
-                    session_full = unverified_sessions.get(invocation_identifier)
-                    
-                    caller_location = get_caller_location(f_current)
+
+                    tag, session_full = get_session_full_with_index(invocation_identifier)
+
+                    match(tag):
+                        case "unverified":
+                            observer = session_full.get_anchor().process_observer
+                            if not observer:
+                                session_full.set_unverified_reason(SessionUnverifiedReason.FAILED)
+                                raise RuntimeError("Internal error: process_observer should be exist")
+                            try:
+                                check_in_scope(accepting_observer_scope_location, get_callable_location(observer.observe))
+                            except PermissionError:
+
+
 
                     if not session_full:
+                        if invocation_identifier in injected_sessions:
+                            session_full = 
+                        # There is no session, no observer
                         return NOOP_ANCHOR
                     
+                    
+                    
+                    try:
+                        
+                    except PermissionError:
+                        session_full.set_unverified_reason(SessionUnverifiedReason.INVALID)
+                        raise
                     if invocation_identifier in unverified_sessions:
                         try:
-                            if target_scope_location in caller_location.parents:
+                            session_full.set_as_verified()
+                            unverified_sessions.pop(invocation_identifier)
+                            if not deny_on_leak_port:
+                                anchor = session_full.get_anchor()
                                 session_full.set_as_verified()
-                                unverified_sessions.pop(invocation_identifier)
-                                return session_full.get_anchor()
                             else:
+                                anchor = session_full.get_noop_anchor()
                                 session_full.set_unverified_reason(SessionUnverifiedReason.DENIED)
-                                raise PermissionError("Verifier must be called from within target_scope directory")
+                            return anchor
                         except Exception:
                             # Let an upper-level except clause catch it
                             session_full.set_unverified_reason(SessionUnverifiedReason.FAILED)
@@ -317,8 +416,6 @@ def create_leak_policy(observer_scope: Path | None = None, target_scope: Path | 
                     # Always re-raise permission errors
                     raise
                 except Exception:
-                    if burst:
-                        raise
                     return NOOP_ANCHOR
             
             return leak_port
@@ -332,7 +429,12 @@ def create_leak_policy(observer_scope: Path | None = None, target_scope: Path | 
         
         def get_observation_port(self) -> ObservationPort:
             return observation_port
+        
+        def get_rejected_paths(self) -> dict[Path, dict[Path, int]]:
+            return {p: {**d} for p, d in rejected_paths.items()}
 
 
-    return _Interface()
+    leak_policy =  _Interface()
+
+    return leak_policy
 

@@ -35,3 +35,10 @@ def get_callable_location(callable_: Callable[..., Any]) -> Path:
     assert source_file is not None
     assert path is not None
     return path
+
+def check_in_scope(base: Path, target: Path):
+    if target == base:
+        return
+    if target.is_relative_to(base):
+        return
+    raise PermissionError(f"Session request denied: Target is outside of base. (base = {base}; target ={target})")
