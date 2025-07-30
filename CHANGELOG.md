@@ -38,8 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Anchor` 各ゲッターをプロパティ化。
 - `create_leak_policy`から3段階に分けて`deny`flagを設定できるようにした。いずれかのフラグが立つとAnchorは拒否される
 - スコープ外からのアクセスの履歴を保持。
-- セッションの状態を未承認、承認済、注入中に分けた。これにより、再帰・ポリモフィズムに対応(注入中は同じAnchorを返す)。
-
+- `並列実行`と`再帰・再入・多態の解決`のどちらかを選ばなければならない、両方は無理。`並列実行`を選ぶことにする。
 
 ### Removed
 - `Anchor.observer_scope_path` base_scopeに統合の為削除。
