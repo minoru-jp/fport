@@ -38,15 +38,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Anchor` 各ゲッターをプロパティ化。
 - `create_leak_policy`から3段階に分けて`deny`flagを設定できるようにした。いずれかのフラグが立つとAnchorは拒否される
 - スコープ外からのアクセスの履歴を保持。
-- `並列実行`と`再帰・再入・多態の解決`のどちらかを選ばなければならない、両方は無理。`並列実行`を選ぶことにする。
+- `並列実行`と`再帰・再入・多態の解決`のどちらかを選ばなければならない、今のやり方だと両方は無理。`並列実行`を選ぶことにする。
+- `get_anchor_verifier`に`verify`flagを設定。上位の`deny`に対して、ブロック単位での受け入れを表明できるようにするため。
+- `leak_port`に`verify`フラグを設定。上位の`deny`に対して、実装個別の受け入れを表明できるようにするため。
+- `create_leak_policy`に`absolute_deny`flagを設定。`verify`を無効化する。イタチごっこみたいだが、拒否に関してはLeakPolicyが一番の権限を持てる仕様とする。
+- `_create_verified_anchor_unit`を`anchor.py`へ移行。これに際して`create_verified_anchor_unit`にリネーム。
+- `session.py`を作成。`policy.py`から`Session`に関連するインターフェースと実装を移行、また`_create_session_full`を`create_session_full`にリネーム。
+- `Leakage`を`PortDispatcher`にリネーム。これに関連して`LeakPort.get_anchor_verifier`を`.get_port_dispatcher`にリネーム。
+- `LeakPort`を`LeakImplementation`にリネーム。これに関連して`LeakPolicy.get_leak_port`を`.get_leak_implementation`にリネーム。
+- `ObservationPort`を`Standman`にリネーム。これに関連して`LeakPolicy.get_observation_port`を`.get_standman`にリネーム。
+- `Anchor`を`Port`にリネーム。-> R
+- Rに関連して`VerifiedAnchor`を`VerifiedPort`に、`UnverifiedAnchor`を`UnverifiedPort`に変更。
+- Rに関連して`create_verified_anchor_unit`を`create_verified_port_unit`に変更。
+- Rに関連して`Session.get_anchor`を`.get_port`に、`.get_noop_anchor`を`.get_noop_port`に変更。
+- `Anchor.observe`を`.leak`に変更。
+- `LeakPolicy.get_standman`を`.session_entry`にリネーム。元の`Standman.sessionn_entry`の機能をこちらで受け持つ。
+- `Standman`をリークを受ける側のインターフェースとして再定義 ->D し、`standman.py`へ移動。
+- `anchor.py`を`port.py`へ変更。
+- `observer`というロールを`listener`に置き換え。これに関連した内部変数やシグネチャの変更。
+- `create_verified_port_unit`のシグネチャを変更。リスナーとリスンファンクションを別々に受け取っていたのでリスナーのみ受け取るようにした。さらにリスナーを`ProcessObserver`から`Standman`に変更。
+- `create_session_full`のシグネチャを変更。リスナーへの依存がなくなったため仮引数`observer`(現`listener`)を削除。
+- `Port.process_observer`を`.listener`に変更。
+- `Port.observed_target_function`を`.listened_function`に変更。
+- `observer.py`を`process_observer/`へ移動しパッケージ分割。
+- `Standman`を`Listener`にリネーム。
+- `standman.py`を`listener.py`にリネーム。
+- `create_leak_policy`のシグネチャに`tag_maxlen`と`bad_chars`を追加。`Port.leak`の実装は引数tagをチェックして、不正なら例外を投げることを仕様とする。
+
 
 ### Removed
 - `Anchor.observer_scope_path` base_scopeに統合の為削除。
 - `Anchor.observed_target_scope_path` base_scopeに統合の為削除。
-- `NOOP_ANCHOR` を削除。情報をもったno-op Anchorをポリシー内で作成する方針に変更したため
+- `NOOP_ANCHOR` を削除。情報をもったno-op Anchorをポリシー内で作成する方針に変更したため。
 - `NOOP_ANCHOR_TARGET_FUNCTION_CODE`を削除。同上。
 - `Anchor.souce_module_path`を削除。observe関数の場所を返していたが`ProcessObserver`そのものを返すようにしたため。
 - `Anchor.enble_burst`を削除。やはり観察側の例外を実装側に流すのはおかしい。観察側の例外は観察側で処理、実装側は信頼できないスコープを使用しない。
+- `ObserverPort`を削除。削除前に`Standman`へリネームされたが、リネーム後に削除。
+- `LeakPolicy.get_observer_port`を削除。
+- `Standman.session_entry`を削除。`LeakPolicy.session_entry`へ実装を移行。
+- `ProcessObserver.set_observe_handler`を削除。
 
 ### Added
 - `Anchor.base_scope`　ベースパスを実装側へ提供する。
@@ -55,6 +85,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VerifiedAnchor` 認証済みAnchorを表すマーカークラス
 - `UnverifiedAnchor` 認証失敗時に返されるAnchorのマーカークラス
 - `LeakPolicy.get_rejected_paths` スコープ外からのアクセスの履歴を返す。
+- `standman.py`を追加。
+- Dについて`Standman`を追加
+- Dについて`Standman.leak`を追加
 
 ## [0.1.0] - 2025-07-30
 

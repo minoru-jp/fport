@@ -15,7 +15,8 @@ def get_nth_caller_frame(base_frame: FrameType | None, *, back: int) -> FrameTyp
             if frame is None:
                 raise RuntimeError("Cannot inspect caller frame")
             raise e
-    assert frame is not None
+    if frame is None:
+        raise RuntimeError("Bug: frame is None")
     return frame
 
 def get_caller_location(callee_frame: FrameType | None) -> Path:
@@ -33,7 +34,6 @@ def get_callable_location(callable_: Callable[..., Any]) -> Path:
     source_file = inspect.getsourcefile(callable_)
     path = Path(source_file).resolve(strict=True) # type: ignore Path(None) raises TypeError
     assert source_file is not None
-    assert path is not None
     return path
 
 def check_in_scope(base: Path, target: Path):

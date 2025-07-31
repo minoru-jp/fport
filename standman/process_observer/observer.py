@@ -1,19 +1,17 @@
 
 from __future__ import annotations
 
+import enum
 import inspect
 from types import FunctionType
 from typing import Any, Callable, Protocol
 
+from ..listener import Listener
 
-class ProcessObserver(Protocol):
+class ProcessObserver(Listener, Protocol):
     '''A complete interface for managing anchors and collecting observations through them.
 
     For each condition, only the first violation is recorded in detail.'''
-
-    @property
-    def observe(self) -> ObserveFunction:
-        ...
 
     @property
     def violation(self) -> bool:
@@ -49,9 +47,6 @@ class ProcessObserver(Protocol):
     
     def get_compliant_observations(self) -> dict[str, Observation]:
         ...
-
-    def set_observe_handler(self, tag: str, fn: Callable[..., None]) -> None:
-        ...
     
     def set_violation_handler(self, tag: str, fn: Callable[[Observation], None]) -> None:
         '''Registers a handler to be called when a condition violation occurs for the specified tag.
@@ -63,15 +58,15 @@ class ProcessObserver(Protocol):
         All handling and side effects are the full responsibility of the handler itself.'''
         ...
     
+    def set_exception_handler(self, tag: str, fn: Callable[[str, Observation | None, Exception, bool], None]) -> None:
+            ...
+    
     def get_condition_stat(self, tag: str) -> ConditionStat:
         ...
     
     def reset_observation(self) -> None:
         ...
 
-class ObserveFunction(Protocol):
-    def __call__(self, tag: str, *args: Any, **kwargs: Any) -> None:
-        ...
 
 class Observation:
     '''Detailed observation results by condition.'''
@@ -107,6 +102,11 @@ class ConditionStat:
     def first_violation_at(self) -> int:
         return self._first_violation_at
 
+class ExceptionKind(enum.Enum):
+    ON_CONDITION = 'Exception raised on condition.'
+    ON_VIOLATION = 'Exception raised on violation handler'
+    ON_INTERNAL = 'Exception raised on interfal'
+
 def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> ProcessObserver:
 
     global_violation = False
@@ -117,9 +117,9 @@ def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> Proce
 
     observations = {tag: Observation() for tag in conditions.keys()}
 
-    observe_handlers = {}
-
     violation_handlers = {}
+
+    exception_handler = None
 
     def _reset_observations() -> None:
         nonlocal global_violation, global_fail_reason, global_exception, local_violation, observations
@@ -131,17 +131,18 @@ def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> Proce
 
         observations = {tag: Observation() for tag in conditions.keys()}
 
-    def _call_observe_handler(tag, *args, **kwargs):
-        if tag in observe_handlers:
-            try:
-                observe_handlers[tag](*args, **kwargs)
-            except Exception:
-                pass
-
     def _call_violation_handler(tag, observation):
         if tag in violation_handlers:
             try:
                 violation_handlers[tag](observation)
+            except Exception as e:
+                _call_exception_handler(tag, ExceptionKind.ON_VIOLATION, observation, e)
+                pass
+    
+    def _call_exception_handler(tag, kind, observation, e):
+        if exception_handler:
+            try:
+                exception_handler(tag, kind, observation, e)
             except Exception:
                 pass
     
@@ -159,7 +160,6 @@ def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> Proce
             condition = conditions[tag]
             pass_ = False
             try:
-                _call_observe_handler(tag, *args, **kwargs)
                 pass_ = condition(*args, **kwargs)
             except Exception as e:
                 local_violation = True
@@ -169,8 +169,9 @@ def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> Proce
                     observation.fail_condition = condition
                     observation.fail_reason = f'exception at {tag} at {observation.count}th attempt'
                     observation.exc = e
+                    _call_exception_handler(tag, ExceptionKind.ON_CONDITION, observation, e)
                 _call_violation_handler(tag, observation)
-                return
+                raise
 
 
             if not pass_:
@@ -183,21 +184,19 @@ def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> Proce
                 _call_violation_handler(tag, observation)
             
             observation.count += 1
-                    
         except Exception as e:
             # overrides all global violations
             global_violation = True
             global_fail_reason = "internal error"
             global_exception = e
-        finally:
-            return
+            _call_exception_handler(tag, ExceptionKind.ON_INTERNAL, None, e)
+            raise
     
 
     class _ProcessObserver(ProcessObserver):
         __slots__ = ()
-        @property
-        def observe(self) -> ObserveFunction:
-            return observe
+        def listen(self, tag: str, *args, **kwargs) -> None:
+            observe(tag, *args, **kwargs)
 
         @property
         def violation(self):
@@ -227,20 +226,16 @@ def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> Proce
         
         def get_compliant_observations(self) -> dict[str, Observation]:
             return {k: v for k, v in observations.items() if not v.violation}
-        
-        def set_observe_handler(self, tag: str, fn: Callable[..., None]) -> None:
-            if tag not in conditions:
-                raise ValueError(f"Condition '{tag}' is not defined")
-            sig_handler = inspect.signature(fn)
-            sig_condition = inspect.signature(conditions[tag])
-            if sig_handler != sig_condition:
-                raise TypeError("The call signature of the provided handler must exactly match that of the condition function.")
-            observe_handlers[tag] = fn
     
         def set_violation_handler(self, tag: str, fn: Callable[[Observation], None]) -> None:
             if tag not in conditions:
                 raise ValueError(f"Condition '{tag}' is not defined")
             violation_handlers[tag] = fn
+        
+        def set_exception_handler(self, tag: str, fn: Callable[[str, Observation | None, Exception, bool], None]) -> None:
+            nonlocal exception_handler
+            exception_handler = fn
+
         
         def get_condition_stat(self, tag: str) -> ConditionStat:
             observation = observations[tag]

@@ -8,8 +8,8 @@ The framework emphasizes clear boundaries of responsibility.
 It does not propagate exceptions across those boundaries,
 nor does it return values.
 
-Because of its loosely coupled nature, the source (caller)
-cannot reliably know the destination (callee), even at runtime.
+Because of its loosely coupled nature, the source (leaker)
+cannot reliably know the destination (listener), even at runtime.
 (You can get hints, but not guarantees.)
 
 To help manage this uncertainty, the framework supports policies
@@ -25,8 +25,8 @@ Instead, it provides a way for the source to voluntarily leak
 information if it chooses to do so. That choice—and its
 consequences—belong entirely to the source.
 
-By calling `anchor = get_anchor()`, the source creates a
-potential leak point. Then, with `anchor.observe(...)`,
+By calling `port = get_port()`, the source creates a
+potential leak point. Then, with `port.leak(...)`,
 it actually performs the leak.
 
 While policies can restrict where the leak is allowed to go,
@@ -41,26 +41,20 @@ __version__ = "0.1.0"
 # This is an initial working version.
 # Public API is not yet stable and may change without notice.
 
-from .anchor import Anchor, NOOP_ANCHOR, NOOP_ANCHOR_TARGET_FUNCTION_CODE
+from .port import Port
 
 from .policy import create_leak_policy
-from .policy import LeakPolicy, LeakPort, ObservationPort, Session, SessionUnverifiedReason
+from .policy import LeakPolicy, LeakImplementation, Listener, Session, SessionUnverifiedReason
 
-from .observer import create_process_observer
-from .observer import ProcessObserver, Observation, ConditionStat
+import process_observer
 
 __all__ = (
-    "Anchor",
-    "NOOP_ANCHOR",
-    "NOOP_ANCHOR_TARGET_FUNCTION_CODE",
+    "Port",
     "create_leak_policy",
     "LeakPolicy",
-    "LeakPort",
-    "ObservationPort",
+    "LeakImplementation",
+    "Listener",
     "Session",
     "SessionUnverifiedReason",
-    "create_process_observer",
-    "ProcessObserver",
-    "Observation",
-    "ConditionStat",
+    "process_observer"
 )
