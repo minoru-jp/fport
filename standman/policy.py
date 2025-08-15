@@ -98,10 +98,11 @@ def _create_session_policy_role(
         
         def register_session(self, listen: ListenFunction, target: Port) -> Session:
             with state.local_lock:
+
+                target._set_listen_func(state.permit, listen)
+                
                 if target in state.session_map:
                     raise RuntimeError("A session for this target is already registered.")
-                
-                target._set_listen_func(state.permit, listen)
                 
                 session = Session()
                 state.session_map[target] = session
