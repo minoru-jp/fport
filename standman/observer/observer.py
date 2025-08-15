@@ -1,24 +1,28 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 import enum
-import inspect
-from types import FunctionType
-from typing import Any, Callable, Protocol
+from typing import Callable
 
-from ..listener import Listener
-
-class ProcessObserver(Listener, Protocol):
+class ProcessObserver(ABC):
     '''A complete interface for managing anchors and collecting observations through them.
 
     For each condition, only the first violation is recorded in detail.'''
 
+    @abstractmethod
+    def listen(self, tag: str, *args, **kwargs) -> None:
+        ...
+
     @property
+    @abstractmethod
     def violation(self) -> bool:
         '''A flag indicating any violation, regardless of whether it is associated with a defined condition.'''
         ...
     
+
     @property
+    @abstractmethod
     def global_violation(self) -> bool:
         '''A flag indicating a violation not associated with any defined condition.
 
@@ -27,27 +31,34 @@ class ProcessObserver(Listener, Protocol):
         ...
     
     @property
+    @abstractmethod
     def local_violation(self) -> bool:
         '''A flag indicating a violation associated with a defined condition.'''
         ...
     
     @property
+    @abstractmethod
     def global_fail_reason(self) -> str:
         ...
     
     @property
+    @abstractmethod
     def global_exception(self) -> Exception | None:
         ...
 
+    @abstractmethod
     def get_all_observations(self) -> dict[str, Observation]:
         ...
     
+    @abstractmethod
     def get_violated_observations(self) -> dict[str, Observation]:
         ...
     
+    @abstractmethod
     def get_compliant_observations(self) -> dict[str, Observation]:
         ...
     
+    @abstractmethod
     def set_violation_handler(self, tag: str, fn: Callable[[Observation], None]) -> None:
         '''Registers a handler to be called when a condition violation occurs for the specified tag.
 
@@ -58,12 +69,15 @@ class ProcessObserver(Listener, Protocol):
         All handling and side effects are the full responsibility of the handler itself.'''
         ...
     
-    def set_exception_handler(self, tag: str, fn: Callable[[str, Observation | None, Exception, bool], None]) -> None:
+    @abstractmethod
+    def set_exception_handler(self, fn: Callable[[str, ExceptionKind, Observation | None, Exception], None]) -> None:
             ...
     
+    @abstractmethod
     def get_condition_stat(self, tag: str) -> ConditionStat:
         ...
     
+    @abstractmethod
     def reset_observation(self) -> None:
         ...
 
@@ -105,7 +119,7 @@ class ConditionStat:
 class ExceptionKind(enum.Enum):
     ON_CONDITION = 'Exception raised on condition.'
     ON_VIOLATION = 'Exception raised on violation handler'
-    ON_INTERNAL = 'Exception raised on interfal'
+    ON_INTERNAL = 'Exception raised on internal'
 
 def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> ProcessObserver:
 
@@ -193,7 +207,7 @@ def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> Proce
             raise
     
 
-    class _ProcessObserver(ProcessObserver):
+    class _Interface(ProcessObserver):
         __slots__ = ()
         def listen(self, tag: str, *args, **kwargs) -> None:
             observe(tag, *args, **kwargs)
@@ -232,7 +246,7 @@ def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> Proce
                 raise ValueError(f"Condition '{tag}' is not defined")
             violation_handlers[tag] = fn
         
-        def set_exception_handler(self, tag: str, fn: Callable[[str, Observation | None, Exception, bool], None]) -> None:
+        def set_exception_handler(self, fn: Callable[[str, ExceptionKind, Observation | None, Exception], None]) -> None:
             nonlocal exception_handler
             exception_handler = fn
 
@@ -245,5 +259,5 @@ def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> Proce
         def reset_observation(self) -> None:
             _reset_observations()
     
-    return _ProcessObserver()
+    return _Interface()
 

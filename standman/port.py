@@ -1,97 +1,83 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Callable, Protocol
+from abc import ABC, abstractmethod
+from threading import Lock
+from typing import TYPE_CHECKING
 
-from .listener import Listener
-from .policy import LeakPolicy
+from .protocols import ListenFunction
+from .exceptions import OccupiedError, DeniedError
 
-class Port(Protocol):
-    def leak(self, tag: str, *args, **kwargs) -> None:
-        ...
+if TYPE_CHECKING:
+    from .policy import _PortBridgeTOC
 
-    @property
-    def policy_definer_path(self) -> Path:
-        ...
-
-    @property
-    def leak_policy(self) -> LeakPolicy:
-        ...
-
-    @property    
-    def listener(self) -> Listener | None:
-        ...
-    
-    @property
-    def listened_function(self) -> Callable[..., Any]:
-        ...
-
-    @property
-    def base_scope(self) -> Path:
-        ...
-
-class VerifiedPort(Port):
+class Port(ABC):
     __slots__ = ()
+    @abstractmethod
+    def send(self, tag: str, *args, **kwargs) -> None:
+        ...
+    @abstractmethod
+    def _set_listen_func(self, key: object, listen: ListenFunction) -> None:
+        ...
+    @abstractmethod
+    def _remove_listen_func(self, key: object) -> None:
+        ...
 
-class UnverifiedPort(Port):
-    __slots__ = ()
+def create_port(bridge: _PortBridgeTOC) -> Port:
 
+    lock = Lock()
+    listen_func = None
 
-def create_verified_port_unit(
-        listener: Listener,
-        policy_definer_location: Path,
-        leak_policy: LeakPolicy,
-        base_scope: Path,
-        target: Callable[..., Any],
-        tag_validator: Callable[[str], None]
-) -> tuple[VerifiedPort, VerifiedPort]:
-    
-    listened_function = listener.listen
-
-    class _Port(VerifiedPort):
+    class _Interface(Port):
         __slots__ = ()
-        def leak(self, tag: str, *args, **kwargs) -> None:
-            tag_validator(tag)
-            try:
-                listened_function(*args, **kwargs)
-            except Exception:
-                pass
-        @property
-        def policy_definer_path(self) -> Path:
-            return policy_definer_location
-        @property
-        def leak_policy(self) -> LeakPolicy:
-            return leak_policy
-        @property
-        def base_scope(self) -> Path:
-            return base_scope
-        @property
-        def listener(self) -> Listener:
-            return listener
-        @property
-        def listened_function(self) -> Callable[..., Any]:
-            return target
-
-    class _NoOpPort(VerifiedPort):
-        __slots__ = ()
-        def leak(self, tag: str, *args, **kwargs) -> None:
-            tag_validator(tag)
         
-        @property
-        def policy_definer_path(self) -> Path:
-            return policy_definer_location
-        @property
-        def leak_policy(self) -> LeakPolicy:
-            return leak_policy
-        @property
-        def base_scope(self) -> Path:
-            return base_scope
-        @property
-        def listener(self) -> Listener:
-            return listener
-        @property
-        def listened_function(self) -> Callable[..., Any]:
-            return target
-    
-    return (_Port(), _NoOpPort())
+        def send(self, tag: str, *args, **kwargs) -> None:
+            bridge.get_message_validator()(tag, *args, **kwargs)
+            try:
+                if listen_func:
+                    listen_func(tag, *args, **kwargs)
+            except Exception as e:
+                session = bridge.get_session(self)
+                if session is not None:
+                    session.set_error(e)
+            finally:
+                return None
+        
+        def _set_listen_func(self, key: object, listen: ListenFunction) -> None:
+            nonlocal listen_func
+            with lock:
+                if key is not bridge.get_permit():
+                    raise PermissionError # without any infomation.
+                if listen_func is not None:
+                    raise OccupiedError("Port is already occupied by another session.")
+                listen_func = listen
+        
+        def _remove_listen_func(self, key: object) -> None:
+            nonlocal listen_func
+            with lock:
+                if key is not bridge.get_permit():
+                    raise PermissionError # without any infomation.
+                listen_func = None
+
+    interface = _Interface()
+
+    return interface
+
+def create_noop_port(bridge: _PortBridgeTOC) -> Port:
+    class _Interface(Port):
+        __slots__ = ()
+        def send(self, tag: str, *args, **kwargs) -> None:
+            pass
+        
+        def _set_listen_func(self, key: object, listen: ListenFunction) -> None:
+            if key is not bridge.get_permit():
+                raise PermissionError # without any infomation.
+            raise DeniedError("Connection is denied by the policy.")
+        
+        def _remove_listen_func(self, key: object) -> None:
+            if key is not bridge.get_permit():
+                raise PermissionError # without any information.
+
+    interface = _Interface()
+
+    return interface
 

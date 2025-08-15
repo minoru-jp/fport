@@ -30,6 +30,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+
+### Removed
+
+### Added
+
+
+## [0.1.0] - 2025-07-30
+
+### Added
+- 初期バージョンとして anchor / observer / policy / caller モジュールを実装。
+
+
+## [0.2.0] - 2025-08-16
+
+> 根本的な再設計を行いました。
+> 大幅な改善点は、関数と関数ではなく、関数とPortをバインドする方法を取ったことによって、フレームスタックの取得の必要がなくなった点です。
+
+### Changed
 - `create_leak_policy`のスコープに関する引数を省略できないように変更。
 - 引数は観察側と実装側のスコープを分けていたが、ベーススコープ一つを取るように変更。
 - ベーススコープ以下であれば、実装側、観察側どちらをどこにおいてもよいという解釈に変更。
@@ -64,6 +82,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Standman`を`Listener`にリネーム。
 - `standman.py`を`listener.py`にリネーム。
 - `create_leak_policy`のシグネチャに`tag_maxlen`と`bad_chars`を追加。`Port.leak`の実装は引数tagをチェックして、不正なら例外を投げることを仕様とする。
+- `create_leak_policy`のシグネチャに`bad_words`を追加。そして`bad_chars`を取り消し。文字と単語の境を無くし、すべて単語として処理する。
+- `Port.leak`を`.send`にリネーム。
+- `LeakImplementation`の削除に伴い。`.get_port_dispatcher`を`LeakPolicy`に移行。
+- `LeakPolicy`を`SessionPolicy`にリネーム。これに関連して`create_leak_policy`を`create_session_policy`にリネーム。
+- `SessionFull.get_invocation_identifier`を`.get_session_id`にリネーム。
+- `create_session_policy`のシグネチャの`bad_words`,`tag_maxlen`を取り消し。
+- `create_session_policy`のシグネチャに`tag_validator`と`args_validator`を追加。これで、管理側にportに与えられたtagと引数をチェックするハンドラを受け取る。
+- `Port.leak_policy`を`.session_policy`にリネーム。
+- 概念的にセッションが送信側の関数(SF)を占有することにする。つまりセッション中、たとえどこからSFが呼ばれても、そのセッションのポートにマップされる仕様にする。
+- 送信側のモジュール(`SessionPolicy.get_port_dispatcher()`を呼び出したモジュール)に暗黙的なマップを定義する。M
+- 一つのポリシーが送信側モジュールを占有し、複数のポリシーがマップを定義しすることはできないものとする(共通のマップ名と、ロックを使用する)。
+- `get_port_dispatcher`が定義していたlimited_scopeを廃止。どこで評価したらいいかわからなくなったので一旦廃止。
+- 識別方法を次のように定義。管理側->モジュール名->送信側のディスパッチャー。送信側->送信関数の`CodeType`->受信側の`Session`。
+- 根本的に再設計。
+
 
 
 ### Removed
@@ -77,6 +110,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LeakPolicy.get_observer_port`を削除。
 - `Standman.session_entry`を削除。`LeakPolicy.session_entry`へ実装を移行。
 - `ProcessObserver.set_observe_handler`を削除。
+- `LeakImplementation`を削除。これに関連して`LeakPolicy.get_leak_implementation`を削除。
+- `Session.get_invocation_identifier`を削除。
+- 根本的に再設計。
 
 ### Added
 - `Anchor.base_scope`　ベースパスを実装側へ提供する。
@@ -88,8 +124,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `standman.py`を追加。
 - Dについて`Standman`を追加
 - Dについて`Standman.leak`を追加
-
-## [0.1.0] - 2025-07-30
-
-### Added
-- 初期バージョンとして anchor / observer / policy / caller モジュールを実装。
+- `SessionState`を追加。これに関連して、`SessionFull.state`をプロパティとして追加。
+- 上に関連して`SessionFull.verified`,`SessionFull.closed`を追加。
+- `_SessionMap`を追加。これに関連して`_create_session_map`を追加。
+- Mに関連して、`lockman.py`を追加。
+- `lockman.get_global_slock`を追加。とりあえず一番広範囲なグローバルロックのみ提供する。
+- 根本的に再設計。
