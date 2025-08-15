@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- create_portで作るPortの実装をエラーが一度起こった後はlisten_funcを呼び出さないように修正。
+
 
 ### Removed
 

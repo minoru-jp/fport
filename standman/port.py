@@ -26,16 +26,19 @@ def create_port(bridge: _PortBridgeTOC) -> Port:
 
     lock = Lock()
     listen_func = None
+    error = None
 
     class _Interface(Port):
         __slots__ = ()
         
         def send(self, tag: str, *args, **kwargs) -> None:
+            nonlocal error
             bridge.get_message_validator()(tag, *args, **kwargs)
             try:
-                if listen_func:
+                if listen_func and not error:
                     listen_func(tag, *args, **kwargs)
             except Exception as e:
+                error = e
                 session = bridge.get_session(self)
                 if session is not None:
                     session.set_error(e)
