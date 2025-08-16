@@ -33,9 +33,9 @@ def create_port(bridge: _PortBridgeTOC) -> Port:
         
         def send(self, tag: str, *args, **kwargs) -> None:
             nonlocal error
-            bridge.get_message_validator()(tag, *args, **kwargs)
             try:
                 if listen_func and not error:
+                    bridge.get_message_validator()(tag, *args, **kwargs)
                     listen_func(tag, *args, **kwargs)
             except Exception as e:
                 error = e
