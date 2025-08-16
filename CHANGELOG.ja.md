@@ -30,9 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- create_portで作るPortの実装をエラーが一度起こった後はlisten_funcを呼び出さないように修正。
-- portの占有に関するガード節の順序を変更
-- `Port.send()`を`message_validator`が出した例外を実装側に上げないように修正。
 
 ### Removed
 
@@ -133,3 +130,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mに関連して、`lockman.py`を追加。
 - `lockman.get_global_slock`を追加。とりあえず一番広範囲なグローバルロックのみ提供する。
 - 根本的に再設計。
+
+
+## [0.3.0] - 2025-08-17
+
+### Changed
+- create_portで作るPortの実装をエラーが一度起こった後はlisten_funcを呼び出さないように修正。
+- portの占有に関するガード節の順序を変更
+- `Port.send()`を`message_validator`が出した例外を実装側に上げないように修正。
+- 各モジュールのドキュメントを整備
+
+### Removed
+
+### Added
+
+### Security
+- Portの認証を双方向にして、SessionPolicy自身が作成したPortのみ接続を確立するように変更
