@@ -34,7 +34,7 @@ def test_set_error_is_thread_safe_first_error_kept():
     assert all(not t.is_alive() for t in threads), "Worker thread did not finish"
 
     # After concurrent calls, the first error must be kept and active must be False.
-    assert s.active is False
+    assert s.ok is False
     assert s.error is not None
     assert any(s.error is exc for exc in exceptions)
 
@@ -56,7 +56,7 @@ def test_readers_see_consistent_state_pairs_under_write():
         # Start all readers together
         start.wait(timeout=1.0)
         for _ in range(2000):
-            a = state.active
+            a = state.ok
             e = state.error
             if (a is False and e is None) or (a is True and e is not None):
                 inconsistent.append((a, e))
