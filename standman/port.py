@@ -6,11 +6,18 @@ information to observers. Ports are created via SessionPolicy
 and are responsible for linking sender functions to listener
 callbacks in a fail-silent manner.
 
+
 Design note:
     Ports are designed not to introduce unintended side effects
     into the implementation: exceptions never propagate back to
     the sender, and send() does not enforce serialization that
     could mask concurrency issues.
+
+    Registration and removal of listeners are thread-safe, but this is
+    provided for potential future changes and extensions. At present,
+    only single-threaded usage is assumed.
+    In contrast, Port.send() is always thread-unsafe, and this will never
+    change, even with future modifications or extensions.
 
 Scope of Port usage:
     Ports can be defined with different scopes depending on the use case:
@@ -71,8 +78,9 @@ Scope of Port usage:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from threading import Lock
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from .protocols import ListenFunction
 from .exceptions import OccupiedError, DeniedError
@@ -121,26 +129,41 @@ class Port(ABC):
     @abstractmethod
     def _get_entry_permit(self) -> object:
         """Return the identifier of the SessionPolicy that created this Port."""
-        
 
-def _create_port(bridge: _PortBridgeTOC) -> Port:
-    """Factory: create a functional Port linked to a SessionPolicy."""
 
-    lock = Lock()
-    listen_func = None
-    error = None
+class _StateTOC(Protocol):
+    lock: Lock
+    listen_func: ListenFunction | None
+    error: Exception | None
+
+
+class _RoleTOC(Protocol):
+    state: _StateTOC
+    interface: Port
+
+
+def _create_port_role(bridge: _PortBridgeTOC) -> _RoleTOC:
+
+    @dataclass(slots = True)
+    class _State(_StateTOC):
+        lock: Lock = field(default_factory = Lock)
+        listen_func: ListenFunction | None = field(default = None)
+        error: Exception | None = field(default = None)
+    
+    state = _State()
 
     class _Interface(Port):
         __slots__ = ()
         
         def send(self, tag: str, *args, **kwargs) -> None:
-            nonlocal error
             try:
+                listen_func = state.listen_func
+                error = state.error
                 if listen_func and not error:
                     bridge.get_message_validator()(tag, *args, **kwargs)
                     listen_func(tag, *args, **kwargs)
             except Exception as e:
-                error = e
+                state.error = e
                 session = bridge.get_session(self)
                 if session is not None:
                     session.set_error(e)
@@ -148,24 +171,22 @@ def _create_port(bridge: _PortBridgeTOC) -> Port:
                 return None
         
         def _set_listen_func(self, key: object, listen: ListenFunction) -> None:
-            nonlocal listen_func
-            with lock:
+            with state.lock:
                 # If an error has already occurred, do nothing instead of raising OccupiedError.
-                if error:
+                if state.error:
                     return
                 if key is not bridge.get_control_permit():
                     raise PermissionError("Verification failed")
-                if listen_func is not None:
+                if state.listen_func is not None:
                     raise OccupiedError("Port is already occupied by another session.")
-                listen_func = listen
+                state.listen_func = listen
         
         def _remove_listen_func(self, key: object) -> None:
-            nonlocal listen_func, error
-            with lock:
+            with state.lock:
                 if key is not bridge.get_control_permit():
                     raise PermissionError("Verification failed")
-                listen_func = None
-                error = None
+                state.listen_func = None
+                state.error = None
                 
         
         def _get_entry_permit(self) -> object:
@@ -173,7 +194,19 @@ def _create_port(bridge: _PortBridgeTOC) -> Port:
 
     interface = _Interface()
 
-    return interface
+    @dataclass(slots = True)
+    class _Role(_RoleTOC):
+        state: _StateTOC
+        interface: Port
+
+    return _Role(state = state, interface = interface)
+
+
+def _create_port(bridge: _PortBridgeTOC) -> Port:
+    """Factory: create a functional Port linked to a SessionPolicy."""
+    role = _create_port_role(bridge)
+    return role.interface
+
 
 def _create_noop_port(bridge: _PortBridgeTOC) -> Port:
     """Factory: create a no-op Port that denies all connections."""
