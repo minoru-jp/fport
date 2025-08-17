@@ -1,6 +1,6 @@
 # standman
 
-> **As of version 0.2.0, the examples in this document have not been tested for actual execution.**
+> **As of version 0.3.0, the examples in this document have not been tested for actual execution.**
 > The API and behavior may change without notice. Use at your own risk.
 
 ## Overview
