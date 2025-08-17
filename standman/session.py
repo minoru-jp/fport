@@ -16,7 +16,7 @@ class SessionState(ABC):
     __slots__ = ()
     @property
     @abstractmethod
-    def active(self) -> bool:
+    def ok(self) -> bool:
         """Whether the session is still active."""
     
     @property
@@ -39,7 +39,7 @@ class Session:
         self._error = None
     
     @property
-    def active(self) -> bool:
+    def ok(self) -> bool:
         """Whether the session is still active."""
         with self._lock:
             return self._active
@@ -64,12 +64,14 @@ class Session:
 
         class _SessionState(SessionState):
             @property
-            def active(self) -> bool:
-                return outer.active
+            def ok(self) -> bool:
+                return outer.ok
             
             @property
             def error(self) -> Exception | None:
                 return outer.error
         
         return _SessionState()
+
+
 
