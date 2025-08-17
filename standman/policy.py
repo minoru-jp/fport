@@ -25,7 +25,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from threading import Lock
-from typing import ContextManager, Protocol, cast
+from typing import Callable, ContextManager, Protocol, cast
 from contextlib import contextmanager
 
 from .port import Port, _create_port, _create_noop_port
@@ -68,7 +68,7 @@ class SessionPolicy(ABC):
 
 class _ConstantTOC(Protocol):
     """Internal structure: constants"""
-    DEFAULT_MESSAGE_VALIDATOR: SendFunction
+    SENTINELS: dict[str, Callable]
 
 class _StateTOC(Protocol):
     """Internal structure: state variables"""
@@ -76,7 +76,7 @@ class _StateTOC(Protocol):
 
     session_map: dict[Port, Session]
 
-    mess_validator: SendFunction
+    mess_validator: tuple[Callable]
 
     entry_permit: object
     control_permit: object
@@ -89,10 +89,10 @@ class _CoreTOC(Protocol):
     def unregister_session(self, target: Port) -> None:
         ...
 
-    def create_port(self, permit: object) -> Port:
+    def create_port(self) -> Port:
         ...
     
-    def create_noop_port(self, permit: object) -> Port:
+    def create_noop_port(self) -> Port:
         ...
     
     def session(self, listen: ListenFunction, target: Port) -> ContextManager[SessionState]:
@@ -131,21 +131,22 @@ def _create_session_policy_role(
 
     class _Constant(_ConstantTOC):
         __slots__ = ()
-        DEFAULT_MESSAGE_VALIDATOR: SendFunction = lambda tag, *a, **kw: None
+        SENTINELS = {"DEFAULT_MESSAGE_VALIDATOR": lambda tag, *a, **kw: None}
     
     constant = _Constant()
 
 
-    @dataclass(slots = True)
     class _State(_StateTOC):
-        local_lock: Lock = field(default_factory = Lock)
+        __slots__ = ()
 
-        session_map: dict[Port, Session] = field(default_factory = dict)
+        local_lock: Lock = Lock()
 
-        mess_validator: SendFunction = field(default = message_validator if message_validator else constant.DEFAULT_MESSAGE_VALIDATOR)
+        session_map: dict[Port, Session] = {}
 
-        entry_permit: object = field(default = object())
-        control_permit: object = field(default = object())
+        entry_permit: object = object()
+        control_permit: object = object()
+
+        mess_validator = (message_validator if message_validator else constant.SENTINELS["DEFAULT_MESSAGE_VALIDATOR"],)
 
     state = _State()
 
@@ -212,7 +213,7 @@ def _create_session_policy_role(
             return state.control_permit
         
         def get_message_validator(self):
-            return state.mess_validator
+            return state.mess_validator[0]
     
     port_bridge = _PortBridge()
 
@@ -271,4 +272,6 @@ def create_session_policy(
         block_port = block_port,
         message_validator= message_validator)
     return role.interface
+
+
 

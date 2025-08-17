@@ -57,7 +57,7 @@ def example():
     # Run with session
     with policy.session(listener, port) as state:
         result = add(2, 3)
-        assert state.active
+        assert state.ok
         assert state.error is None
         print("Result:", result)
 
