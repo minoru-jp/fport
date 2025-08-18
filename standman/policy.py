@@ -28,7 +28,8 @@ from threading import Lock
 from typing import Callable, ContextManager, Protocol, cast
 from contextlib import contextmanager
 
-from .port import Port, _create_port, _create_noop_port
+from .port import Port, _create_port, _create_noop_port, _create_port_role
+from .port import _RoleTOC as _PortRoleTOC
 from .protocols import ListenFunction, SendFunction
 from .session import Session, SessionState
 from .exceptions import DeniedError
@@ -81,6 +82,13 @@ class _StateTOC(Protocol):
     entry_permit: object
     control_permit: object
 
+class _KernelTOC(Protocol):
+    def create_port(self, bridge: _PortBridgeTOC) -> _PortRoleTOC | Port:
+        ...
+    
+    def create_noop_port(self, bridge: _PortBridgeTOC) -> Port:
+        ...
+
 class _CoreTOC(Protocol):
     """Internal structure: core functions"""
     def register_session(self, listen: ListenFunction, target: Port) -> Session:
@@ -112,12 +120,11 @@ class _PortBridgeTOC(Protocol):
     def get_message_validator(self) -> SendFunction:
         ...
     
-
-
 class _RoleTOC(Protocol):
     """Internal structure: accessors to role-specific interfaces"""
     constant: _ConstantTOC
     state: _StateTOC
+    kernel: _KernelTOC
     core: _CoreTOC
     port_bridge: _PortBridgeTOC
     interface: SessionPolicy
@@ -150,6 +157,18 @@ def _create_session_policy_role(
 
     state = _State()
 
+    class _Kernel(_KernelTOC):
+        def create_port(self, bridge: _PortBridgeTOC) -> _PortRoleTOC | Port:
+            if not block_port:
+                return _create_port_role(port_bridge)
+            else:
+                return _create_noop_port(port_bridge)
+        
+        def create_noop_port(self, bridge: _PortBridgeTOC) -> Port:
+            return _create_noop_port(port_bridge)
+    
+    kernel = _Kernel()
+
     class _Core(_CoreTOC):
         
         def register_session(self, listen: ListenFunction, target: Port) -> Session:
@@ -176,13 +195,11 @@ def _create_session_policy_role(
                     raise RuntimeError(f"Internal error: Session not found") from e
 
         def create_port(self) -> Port:
-            if not block_port:
-                return _create_port(port_bridge)
-            else:
-                return _create_noop_port(port_bridge)
+            obj = kernel.create_port(port_bridge)
+            return obj.interface if not isinstance(obj, Port) else obj
         
         def create_noop_port(self) -> Port:
-            return _create_noop_port(port_bridge)
+            return kernel.create_noop_port(port_bridge)
         
         def session(self, listen: ListenFunction, target: Port) -> ContextManager[SessionState]:
             if not isinstance(target, Port):
@@ -234,6 +251,7 @@ def _create_session_policy_role(
     class _Role(_RoleTOC):
         constant: _ConstantTOC
         state: _StateTOC
+        kernel: _KernelTOC
         core: _CoreTOC
         port_bridge: _PortBridgeTOC
         interface: SessionPolicy
@@ -241,6 +259,7 @@ def _create_session_policy_role(
     return _Role(
         constant = constant,
         state = state,
+        kernel = kernel,
         core = core,
         port_bridge = port_bridge,
         interface = interface)
