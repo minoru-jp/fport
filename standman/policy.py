@@ -56,10 +56,15 @@ class SessionPolicy(ABC):
                 The Port to connect to.
 
         Raises:
+            TypeError:
+                Raised if the target is not an instance of Port.
             OccupiedError:
                 Raised if another session has already started for the target.
             DeniedError:
                 Raised if the Port or SessionPolicy is configured to reject connections.
+            RuntimeError:
+                Raised if an unexpected internal state is encountered.
+                This exception should not normally occur in regular usage.
 
         Returns:
             A context manager that controls the start and end of the session.
