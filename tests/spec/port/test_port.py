@@ -6,7 +6,7 @@ from standman.port import Port, _create_port_role
 from standman.policy import _PortBridgeTOC
 from standman.exceptions import OccupiedError
 from standman.protocols import SendFunction
-from standman.session import Session
+from standman.session import Session, SessionState
     
 class FakeBridge(_PortBridgeTOC):
     def __init__(self):
@@ -214,3 +214,68 @@ def test_send_validator_exception_is_fail_silent_and_latched():
     assert isinstance(state.error, ValueError)
     assert "validator failed" in str(state.error)
 
+def test_port_set_listen_func_after_error_is_ignored():
+    """Once a Port has entered error state, setting a new listener must be ignored."""
+
+    role = standman.policy._create_session_policy_role()
+    core = role.core
+    port = core.create_port()
+
+    class CustomError(Exception):
+        pass
+
+    def bad_listener(tag, *args, **kwargs):
+        raise CustomError("listener failure")
+
+    # Start a session and trigger an error through the bad listener
+    with core.session(bad_listener, port) as state:
+        port.send("oops")
+        assert not state.ok
+        assert isinstance(state.error, CustomError)
+
+    # After error, the session is gone but the Port still remembers the error
+    assert role.port_bridge.get_session(port) is None
+
+    def new_listener(tag, *args, **kwargs):
+        pytest.fail("listener should never be called")
+
+    # Even with a valid control permit, the Port must ignore the new listener
+    port._set_listen_func(role.port_bridge.get_control_permit(), new_listener)
+
+    # Sending again must not call the new listener (test will fail if it does)
+    port.send("should_be_ignored")
+
+
+def test_port_can_be_reused_after_session_end():
+    """A Port must be reusable after a session ends."""
+
+    role = standman.policy._create_session_policy_role()
+    core = role.core
+    port = core.create_port()
+
+    calls = []
+
+    def first_listener(tag, *args, **kwargs):
+        calls.append(("first", tag))
+
+    def second_listener(tag, *args, **kwargs):
+        calls.append(("second", tag))
+
+    # First session
+    with core.session(first_listener, port) as state1:
+        assert isinstance(state1, SessionState)
+        assert state1.ok
+        port.send("msg1")
+
+    # After leaving the context, the first session is gone
+    assert role.port_bridge.get_session(port) is None
+
+    # Second session on the same port should be possible
+    with core.session(second_listener, port) as state2:
+        assert isinstance(state2, SessionState)
+        assert state2.ok
+        port.send("msg2")
+
+    # Verify both listeners were called at the right times
+    assert ("first", "msg1") in calls
+    assert ("second", "msg2") in calls

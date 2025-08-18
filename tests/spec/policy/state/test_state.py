@@ -42,7 +42,7 @@ def test_state_instances_are_independent():
     assert s1 is not s2
 
     # session_map must be independent (no shared dict)
-    s1.session_map["dummy"] = "value"
+    s1.session_map["dummy"] = "value" # type: ignore
     assert "dummy" not in s2.session_map
 
     # Permits must be unique per state
