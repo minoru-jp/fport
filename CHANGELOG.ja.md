@@ -36,10 +36,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 
-## [0.1.0] - 2025-07-30
+## [1.0.0] - 2025-08-19
+
+### Changed
+- policyの実装に`_Kernel`を導入
+- `ProcessObserver`の実装をクラスインスタンスへ変更
+- READMEの整備
+
+### Removed
 
 ### Added
-- 初期バージョンとして anchor / observer / policy / caller モジュールを実装。
+- テストを追加
+
+## [0.3.0] - 2025-08-17
+
+### Changed
+- create_portで作るPortの実装をエラーが一度起こった後はlisten_funcを呼び出さないように修正。
+- portの占有に関するガード節の順序を変更
+- `Port.send()`を`message_validator`が出した例外を実装側に上げないように修正。
+- 各モジュールのドキュメントを整備
+
+### Removed
+
+### Added
+
+### Security
+- Portの認証を双方向にして、SessionPolicy自身が作成したPortのみ接続を確立するように変更
+
 
 
 ## [0.2.0] - 2025-08-16
@@ -132,17 +155,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 根本的に再設計。
 
 
-## [0.3.0] - 2025-08-17
-
-### Changed
-- create_portで作るPortの実装をエラーが一度起こった後はlisten_funcを呼び出さないように修正。
-- portの占有に関するガード節の順序を変更
-- `Port.send()`を`message_validator`が出した例外を実装側に上げないように修正。
-- 各モジュールのドキュメントを整備
-
-### Removed
+## [0.1.0] - 2025-07-30
 
 ### Added
+- 初期バージョンとして anchor / observer / policy / caller モジュールを実装。
 
-### Security
-- Portの認証を双方向にして、SessionPolicy自身が作成したPortのみ接続を確立するように変更
+
