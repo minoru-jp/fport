@@ -1,85 +1,142 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import enum
 from typing import Callable
 
-class ProcessObserver(ABC):
-    '''A complete interface for managing anchors and collecting observations through them.
 
-    For each condition, only the first violation is recorded in detail.'''
+class ProcessObserver:
+    __slots__ = ('_conditions', '_global_violation', '_global_fail_reason', '_global_exception',
+                 '_local_violation', '_observations', '_violation_handlers', '_exception_handler')
 
-    @abstractmethod
+    def __init__(self, conditions: dict[str, Callable[..., bool]]):
+        self._conditions = conditions
+
+        self._global_violation = False
+        self._global_fail_reason = ''
+        self._global_exception = None
+
+        self._local_violation = False
+
+        self._observations = {tag: Observation() for tag in conditions.keys()}
+
+        self._violation_handlers = {}
+
+        self._exception_handler = None
+
+
+    def reset_observations(self) -> None:
+        self._global_violation = False
+        self._global_fail_reason = ''
+        self._global_exception = None
+
+        self._local_violation = False
+
+        self._observations = {tag: Observation() for tag in self._conditions.keys()}
+
+    
     def listen(self, tag: str, *args, **kwargs) -> None:
-        ...
+        try:
+            if tag not in self._observations:
+                if not self._global_violation:
+                    self._global_violation = True
+                    self._global_fail_reason = f"wrong tag '{tag}'"
+                return
+            
+            observation = self._observations[tag]
+            condition = self._conditions[tag]
+            pass_ = False
+            try:
+                pass_ = condition(*args, **kwargs)
+            except Exception as e:
+                self._local_violation = True
+                if not observation.violation:
+                    observation.violation = True
+                    observation.first_violation_at = observation.count
+                    observation.fail_condition = condition
+                    observation.fail_reason = f'exception at {tag} at {observation.count}th attempt'
+                    observation.exc = e
+                    self._call_exception_handler(tag, ExceptionKind.ON_CONDITION, observation, e)
+                self._call_violation_handler(tag, observation)
 
-    @property
-    @abstractmethod
-    def violation(self) -> bool:
-        '''A flag indicating any violation, regardless of whether it is associated with a defined condition.'''
-        ...
-    
 
-    @property
-    @abstractmethod
-    def global_violation(self) -> bool:
-        '''A flag indicating a violation not associated with any defined condition.
+            if not pass_:
+                self._local_violation = True
+                if not observation.violation:
+                    observation.violation = True
+                    observation.first_violation_at = observation.count
+                    observation.fail_condition = condition
+                    observation.fail_reason = 'condition violation'
+                self._call_violation_handler(tag, observation)
+            
+            observation.count += 1
+        except Exception as e:
+            # overrides all global violations
+            self._global_violation = True
+            self._global_fail_reason = "internal error"
+            self._global_exception = e
+            self._call_exception_handler(tag, ExceptionKind.ON_INTERNAL, None, e)
 
-        This includes cases where the implementation reports using an undefined tag,
-        or where an undefined error occurs inside the observe() function.'''
-        ...
+
+    def _call_violation_handler(self, tag, observation):
+        if tag in self._violation_handlers:
+            try:
+                self._violation_handlers[tag](observation)
+            except Exception as e:
+                self._call_exception_handler(tag, ExceptionKind.ON_VIOLATION, observation, e)
+                pass
+    
+    def _call_exception_handler(self, tag, kind, observation, e):
+        if self._exception_handler:
+            try:
+                self._exception_handler(tag, kind, observation, e)
+            except Exception:
+                pass
     
     @property
-    @abstractmethod
-    def local_violation(self) -> bool:
-        '''A flag indicating a violation associated with a defined condition.'''
-        ...
+    def violation(self):
+        return self._global_violation or self._local_violation
     
     @property
-    @abstractmethod
+    def global_violation(self):
+        return self._global_violation
+    
+    @property
+    def local_violation(self):
+        return self._local_violation
+    
+    @property
     def global_fail_reason(self) -> str:
-        ...
+        return self._global_fail_reason
     
     @property
-    @abstractmethod
     def global_exception(self) -> Exception | None:
-        ...
+        return self._global_exception
+    
+    def get_all(self) -> dict[str, Observation]:
+        return {k: v for k, v in self._observations.items()}
+    
+    def get_violated(self) -> dict[str, Observation]:
+        return {k: v for k, v in self._observations.items() if v.violation}
+    
+    def get_compliant(self) -> dict[str, Observation]:
+        return {k: v for k, v in self._observations.items() if not v.violation}
+    
+    def get_unevaluated(self) -> dict[str, Observation]:
+        return {k: v for k, v in self._observations.items() if v.count == 0}
 
-    @abstractmethod
-    def get_all_observations(self) -> dict[str, Observation]:
-        ...
-    
-    @abstractmethod
-    def get_violated_observations(self) -> dict[str, Observation]:
-        ...
-    
-    @abstractmethod
-    def get_compliant_observations(self) -> dict[str, Observation]:
-        ...
-    
-    @abstractmethod
     def set_violation_handler(self, tag: str, fn: Callable[[Observation], None]) -> None:
-        '''Registers a handler to be called when a condition violation occurs for the specified tag.
-
-        This handler is invoked each time the corresponding condition is violated.
-        If the handler raises an exception, it is immediately suppressed and never propagated
-        to the implementation side. No flags or logs are provided to indicate this.
-
-        All handling and side effects are the full responsibility of the handler itself.'''
-        ...
+        if tag not in self._conditions:
+            raise ValueError(f"Condition '{tag}' is not defined")
+        self._violation_handlers[tag] = fn
     
-    @abstractmethod
     def set_exception_handler(self, fn: Callable[[str, ExceptionKind, Observation | None, Exception], None]) -> None:
-            ...
-    
-    @abstractmethod
-    def get_condition_stat(self, tag: str) -> ConditionStat:
-        ...
-    
-    @abstractmethod
-    def reset_observation(self) -> None:
-        ...
+        self._exception_handler = fn
+
+    def get_stat(self, tag: str) -> ConditionStat:
+        observation = self._observations[tag]
+        stat = ConditionStat(observation.count, observation.violation, observation.first_violation_at)
+        return stat
 
 
 class Observation:
@@ -116,148 +173,9 @@ class ConditionStat:
     def first_violation_at(self) -> int:
         return self._first_violation_at
 
+
 class ExceptionKind(enum.Enum):
     ON_CONDITION = 'Exception raised on condition.'
     ON_VIOLATION = 'Exception raised on violation handler'
     ON_INTERNAL = 'Exception raised on internal'
-
-def create_process_observer(conditions: dict[str, Callable[..., bool]]) -> ProcessObserver:
-
-    global_violation = False
-    global_fail_reason = ''
-    global_exception = None
-
-    local_violation = False
-
-    observations = {tag: Observation() for tag in conditions.keys()}
-
-    violation_handlers = {}
-
-    exception_handler = None
-
-    def _reset_observations() -> None:
-        nonlocal global_violation, global_fail_reason, global_exception, local_violation, observations
-        global_violation = False
-        global_fail_reason = ''
-        global_exception = None
-
-        local_violation = False
-
-        observations = {tag: Observation() for tag in conditions.keys()}
-
-    def _call_violation_handler(tag, observation):
-        if tag in violation_handlers:
-            try:
-                violation_handlers[tag](observation)
-            except Exception as e:
-                _call_exception_handler(tag, ExceptionKind.ON_VIOLATION, observation, e)
-                pass
-    
-    def _call_exception_handler(tag, kind, observation, e):
-        if exception_handler:
-            try:
-                exception_handler(tag, kind, observation, e)
-            except Exception:
-                pass
-    
-    def observe(tag: str, *args, **kwargs) -> None:
-        try:
-            nonlocal global_violation, global_fail_reason, global_exception, local_violation
-
-            if tag not in observations:
-                if not global_violation:
-                    global_violation = True
-                    global_fail_reason = f"wrong tag '{tag}'"
-                return
-            
-            observation = observations[tag]
-            condition = conditions[tag]
-            pass_ = False
-            try:
-                pass_ = condition(*args, **kwargs)
-            except Exception as e:
-                local_violation = True
-                if not observation.violation:
-                    observation.violation = True
-                    observation.first_violation_at = observation.count
-                    observation.fail_condition = condition
-                    observation.fail_reason = f'exception at {tag} at {observation.count}th attempt'
-                    observation.exc = e
-                    _call_exception_handler(tag, ExceptionKind.ON_CONDITION, observation, e)
-                _call_violation_handler(tag, observation)
-                raise
-
-
-            if not pass_:
-                local_violation = True
-                if not observation.violation:
-                    observation.violation = True
-                    observation.first_violation_at = observation.count
-                    observation.fail_condition = condition
-                    observation.fail_reason = 'condition violation'
-                _call_violation_handler(tag, observation)
-            
-            observation.count += 1
-        except Exception as e:
-            # overrides all global violations
-            global_violation = True
-            global_fail_reason = "internal error"
-            global_exception = e
-            _call_exception_handler(tag, ExceptionKind.ON_INTERNAL, None, e)
-            raise
-    
-
-    class _Interface(ProcessObserver):
-        __slots__ = ()
-        def listen(self, tag: str, *args, **kwargs) -> None:
-            observe(tag, *args, **kwargs)
-
-        @property
-        def violation(self):
-            return global_violation or local_violation
-        
-        @property
-        def global_violation(self):
-            return global_violation
-        
-        @property
-        def local_violation(self):
-            return local_violation
-        
-        @property
-        def global_fail_reason(self) -> str:
-            return global_fail_reason
-        
-        @property
-        def global_exception(self) -> Exception | None:
-            return global_exception
-        
-        def get_all_observations(self) -> dict[str, Observation]:
-            return {k: v for k, v in observations.items()}
-        
-        def get_violated_observations(self) -> dict[str, Observation]:
-            return {k: v for k, v in observations.items() if v.violation}
-        
-        def get_compliant_observations(self) -> dict[str, Observation]:
-            return {k: v for k, v in observations.items() if not v.violation}
-    
-        def set_violation_handler(self, tag: str, fn: Callable[[Observation], None]) -> None:
-            if tag not in conditions:
-                raise ValueError(f"Condition '{tag}' is not defined")
-            violation_handlers[tag] = fn
-        
-        def set_exception_handler(self, fn: Callable[[str, ExceptionKind, Observation | None, Exception], None]) -> None:
-            nonlocal exception_handler
-            exception_handler = fn
-
-        
-        def get_condition_stat(self, tag: str) -> ConditionStat:
-            observation = observations[tag]
-            stat = ConditionStat(observation.count, observation.violation, observation.first_violation_at)
-            return stat
-        
-        def reset_observation(self) -> None:
-            _reset_observations()
-    
-    return _Interface()
 

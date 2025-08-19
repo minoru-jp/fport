@@ -1,9 +1,8 @@
 
-from .observer import ProcessObserver
-from .observer import create_process_observer
+from .observer import ProcessObserver, ExceptionKind
 
 __all__ = (
     'ProcessObserver',
-    'create_process_observer',
+    
 )
 

@@ -190,7 +190,6 @@ def _create_session_policy_role(
             
             return session
         
-        
         def unregister_session(self, target: Port) -> None:
             with state.local_lock:
                 try:

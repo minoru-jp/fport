@@ -1,72 +1,55 @@
-
-# standman
-
-> !!現在のバージョン0.3.0では、このドキュメントに含まれる使用例が実際に動くかどうかを含めてテストが実施されていません。  
-> APIや挙動が予告なく変わる可能性があります。利用は自己責任でお願いします。
+# standman v1.0.0
 
 ## 概要
 
-疎結合による単方向関数連携モジュール。  
-主に簡単なホワイトボックステストの実施を目的としている。  
-また、簡単なアドオンなどの作成に使用することを想定している。
+疎結合による汎用単方向関数連携モジュール
 
-- standman 外部向けインターフェースのファクトリ関数などが定義されている。
-- standman.observer Listenerの実装例としてホワイトボックステスト用のモジュールを定義している。
+このモジュールは実装側から情報を送信するためのインターフェースを提供します。
+
+## 主な目的と使い道
+
+- ホワイトボックステストの実装側からの情報提出用途
+- 簡単なアドオンの作成の際のエントリポイントの作成用途
+
+## 対応環境
+
+- Python 3.10 以降
+- 外部依存ライブラリ: なし
+
+## ライセンス
+
+本モジュールは MIT License の下で提供されます。
+詳細は [LICENSE](./LICENSE) ファイルを参照してください。
+
+
+## インストール
+
+```bash
+pip install git+https://github.com/minoru_jp/standman.git
+```
 
 ## 特徴
 
-- 少ない手順で実装(送信側)に情報のリークポイントを埋め込む手段を提供する。
-- 実装側の行うリークの内容に関するフィルタリング手段を提供する。
-- 実装側が使用するすべてのインターフェースはfail-silent。受信側の失敗やフレームワーク側の失敗が実装側に伝わらないので実装側は副作用を気にせずリークポイントを埋め込むことができる。
-- 受信関数はfail-soft。受信関数内で例外が起こっても、セッションは終了せず、クエリにより、セッションの継続の確認、例外の取得が行える。
-- 受信側のPortへの接続の失敗はfail-fast。セッションの開始前に例外が投げられる。
-- 受信側が送信側のPortインターフェースを指定して接続する構造になっており、送信側はPortインターフェースの定義の仕方で受信側関数へ流す情報の範囲を定義することができる。->使用例・最小構成を参照
-
+- 少ない手順で実装側に情報の送信口を設置できます。
+- 送信インターフェースの使用が実装側に副作用を及ぼさない設計。(受信側の計算量のみ)
+- 送信インターフェースは受信側のエラー、フレームワークのエラーを実装側に伝えません。
+- 送信インターフェースは常にNoneを返します。
+- インターフェースを定義する場所と共有の仕方によって、情報の送信の範囲を柔軟に定義することができます。
+- 送信インターフェースへの接続の拒否を設定することができます。
+- 送信インターフェースへの接続を拒否した場合でも実装側には常に有効なインターフェースが提供されます。
 
 ## 警告
 
-- 個人情報、認証情報そのほか、リークされて困るような情報を扱うプログラムにこのフレームワークを使用しないこと。(実装側から見ると不明な場所への情報のリークを行うことと同じであるため)
+このモジュールが採用する関数の連携は疎結合であり、実装側から接続先を明示しない構造になっているので、
+実装側から外部へ送信する情報はよく検討されなければなりません。実装側からの安易な情報の送信は認証情報、
+個人情報、その他クリティカルな情報の漏洩につながる恐れがあります。また、それらを復元可能な情報も同様です。
 
-## 使用例
+## 並列処理について
 
-### 最小構成 - 関数ごとにPortを設定
+送信インターフェースはスレッドアンセーフです。これはインターフェースの使用が実装側が意図しない直列化を招く
+ことを防ぐものです。並列処理におけるインターフェースを含めた全体の整合性の確保は利用者である実装側に依存します。
 
-```python
-from standman import create_session_policy
-
-policy = create_session_policy()
-create_port = policy.create_port
-
-def sender():
-    port = sender._port
-    port.send("example", "sender")
-
-sender._port = create_port()
-
-```
-
-### 最小構成 - クラスレベルでPortを設定
-
-```python
-from standman import create_session_policy
-
-policy = create_session_policy()
-create_port = policy.create_port
-
-class Foo:
-    _port = create_port()
-
-    def method(self):
-        Foo._port.send("example", "Foo.method")
-    
-class Bar(Foo):
-    def method(self):
-        super().method()
-        Foo._port.send("example", "Bar.method")
-
-```
-
-### 最小構成 - モジュールレベルでPortを設定
+## 簡単な使用例
 
 ```python
 from standman import create_session_policy
@@ -74,74 +57,327 @@ from standman import create_session_policy
 policy = create_session_policy()
 port = policy.create_port()
 
-def func1():
-    port.send("example", "func1")
+def add(a, b):
+    port.send("add", a, b)
+    return a + b
 
-def func2():
-    port.send("example", "func2")
+def listener(tag, *args, **kwargs):
+    print("Received:", tag, args, kwargs)
 
+with policy.session(listener, port) as state:
+    result = add(2, 3)
+    print("Result:", result)
+
+# Output:
+# Received: add (2, 3) {}
+# Result: 5
 ```
 
-### observerの使用例
+---
+
+## 主要な API リファレンス
+
+### `create_session_policy(*, block_port: bool = False, message_validator: SendFunction | None = None) -> SessionPolicy`
+
+`SessionPolicy` を生成するファクトリ関数
+
+* **パラメータ**
+
+  * `block_port: bool`
+    `True` の場合、このポリシーで作成された `Port` はすべて接続を拒否する
+  * `message_validator: SendFunction | None`
+    任意の送信検証関数。`Port.send()` の前に呼び出され、例外を投げると送信が拒否される
+    この例外は送信側に伝播せず、セッション終了として扱われる
+
+* **戻り値**
+  `SessionPolicy`
+
+---
+
+### `class SessionPolicy`
+
+`Port` の生成とセッション確立を管理するインターフェース
+
+* **メソッド**
+
+  * `create_port() -> Port`
+    接続可能な `Port` を生成する
+
+  * `create_noop_port() -> Port`
+    接続を拒否する（no-op）`Port` を生成する
+
+  * `session(listener: ListenFunction, target: Port) -> ContextManager[SessionState]`
+    指定した `Port` に `listener` を接続してセッションを開始するコンテキストマネージャを返す
+
+    * **パラメータ**
+
+      * `listener: ListenFunction`
+        `Port.send()` から渡されたメッセージを受け取るコールバック関数
+        引数 `(tag: str, *args, **kwargs)` を取る
+      * `target: Port`
+        接続対象となる `Port` インスタンス
+
+    * **戻り値**
+      `ContextManager[SessionState]`
+      `with` ブロックで利用するセッションコンテキストマネージャ
+      ブロック内で `SessionState` を取得でき、`ok` と `error` を通じて状態を監視できる
+
+    * **例外**
+
+      * `TypeError`: `target` が `Port` インスタンスでない場合
+      * `OccupiedError`: 指定した `Port` がすでに他のセッションで使用中の場合
+      * `DeniedError`: `Port` または `SessionPolicy` が接続を拒否する設定の場合
+      * `RuntimeError`: 内部状態の不整合など、通常は発生しないエラー
+
+---
+
+### `class Port`
+
+実装（送信）側が情報を送るためのインターフェース
+
+* **メソッド**
+
+  * `send(tag: str, *args, **kwargs) -> None`
+    任意の情報を登録済みリスナに送信する
+
+    * リスナ未登録時は何もしない
+    * 発生した例外は送信側へ伝播しない（fail-silent）
+    * **スレッドアンセーフ**: 意図的に直列化を避ける設計
+
+---
+
+### `class SessionState`
+
+セッションの状態を監視する読み取り専用インターフェース
+
+* **プロパティ**
+
+  * `ok: bool`
+    セッションがまだ有効かどうか
+  * `error: Exception | None`
+    セッション終了の原因となった最初のエラー。なければ `None`
+
+---
+
+### 例外
+
+* `class DeniedError(Exception)`
+  ポリシーまたは `Port` により接続が拒否された場合に送出
+
+* `class OccupiedError(Exception)`
+  `Port` がすでに他のセッションに占有されている場合に送出
+
+---
+
+### プロトコル（型）
+
+* `class SendFunction(Protocol)`&#x20;
+
+  ```python
+  def __call__(tag: str, *args, **kwargs) -> None
+  ```
+
+  送信側がメッセージ送信に用いる呼び出し可能オブジェクト
+
+* `class ListenFunction(Protocol)`&#x20;
+
+  ```python
+  def __call__(tag: str, *args, **kwargs) -> None
+  ```
+
+  受信側がメッセージを処理するための呼び出し可能オブジェクト
+
+---
+
+## observer
+
+このライブラリはリスナーの実装としてobserverを含みます。
+
+### standmanと併用をした際の使用例
 
 ```python
 from standman import create_session_policy
-from standman.observer import create_process_observer
+from standman.observer import ProcessObserver
 
-# management.py
-def message_validator(tag, *args, **kwargs):
-    if not all(isinstance(a, int) for a in (*args, *kwargs.values())):
-        raise TypeError("Sending data is int only.")
-
-policy = create_session_policy(message_validator = message_validator)
-
-# sender.py (implementation module)
-
-create_port = policy.create_port
-
-def bake_cookies(num_children):
-    port = bake_cookies._port
-    ... # process: Mom baking some cookies
-    port.send("Share nicely", num_children, len(cookies))
-    ... # process: Dad doing something
-    return cookies
-
-bake_cookies._port = create_port()
-
-# receiver.py (test module in pytest etc..)
-def test_bake_cookies_share_nicely():
-    share_nicely = lambda ch, co: co % ch == 0
-    observer = create_process_observer({"Share nicely": share_nicely})
-
-    with policy.session(observer.listen, bake_cookies._port) as state:
-
-        bake_cookies(3)
-        
-        if state.active:
-            back_then = not observer.get_condition_stat("Share nicely").violation
-            if not share_nicely(num_children, len(cookies)):
-                if back_then:
-                    assert False, "Mom is suspicious."
-                else:
-                    assert False, "Dad is suspicious."
+def create_weather_sensor(port):
+    """Weather sensor
+    Specification:
+        temp < 0        -> "Freezing" + send("freezing")
+        0 <= temp <= 30 -> "Normal"   + send("normal")
+        temp > 30       -> "Hot"      + send("hot")
+    """
+    def check_weather(temp: int) -> str:
+        # If there is a bug here, it will be detected by the test
+        if temp <= 0:   # ← Common place to inject a bug
+            port.send("freezing", temp)
+            return "Freezing"
+        elif temp <= 30:
+            port.send("normal", temp)
+            return "Normal"
         else:
-            if state.error:
-                assert False, f"Observing is fail with {state.error}"
+            port.send("hot", temp)
+            return "Hot"
+    return check_weather
+
+policy = create_session_policy()
+port = policy.create_port()
+
+# Define expected conditions according to the specification
+conditions = {
+    "freezing": lambda t: t < 0,
+    "normal":   lambda t: 0 <= t <= 30,
+    "hot":      lambda t: t > 30,
+}
+observer = ProcessObserver(conditions)
+check_weather = create_weather_sensor(port)
+
+with policy.session(observer.listen, port) as state:
+    # Test coverage for all three branches
+    for i in (-5, 0, 31):
+        check_weather(i)
+        if not state.ok:
+            raise AssertionError(f"observation failed on '{i}'")
+
+    # Verify that the Observer did not detect any specification violations
+    if observer.violation:
+        details = []
+        for tag, obs in observer.get_violated().items():
+            details.append(
+                f"[{tag}] reason={obs.fail_reason}, "
+                f"count={obs.count}, first_violation_at={obs.first_violation_at}"
+            )
+        raise AssertionError("Observer detected violations:\n" + "\n".join(details))
+
+print("All checks passed!")
 ```
+---
 
-### 接続の拒否とPortの無効化
+## observer APIリファレンス
 
-接続の必要のない場合にポリシーまたは実装側の各所でPortへの接続を拒否、または無効化する方法
+### Class `ProcessObserver`
 
-#### SessionPolicy生成時に接続のブロックを指定する
+プロセスの状態を監視し、条件違反や例外を管理する。
+
+#### Constructor
 
 ```python
-policy = create_session_policy(block_port = True)
+ProcessObserver(conditions: dict[str, Callable[..., bool]])
 ```
 
-#### 実装側のcreate_portへno-opのPortを返すディスパッチャを指定
+指定された条件群を監視対象として初期化する。
+
+#### Methods
+
+* `reset_observations() -> None`
+  全ての観測結果をリセットする。
+
+* `listen(tag: str, *args, **kwargs) -> None`
+  指定タグの条件を評価する。条件違反または例外発生時にハンドラを呼び出す。
+
+* `get_all() -> dict[str, Observation]`
+  全ての観測結果を返す。
+
+* `get_violated() -> dict[str, Observation]`
+  違反が発生した観測結果を返す。
+
+* `get_compliant() -> dict[str, Observation]`
+  違反していない観測結果を返す。
+
+* `get_unevaluated() -> dict[str, Observation]`
+  未評価の観測結果を返す。
+
+* `set_violation_handler(tag: str, fn: Callable[[Observation], None]) -> None`
+  指定タグに違反ハンドラを設定する。
+
+* `set_exception_handler(fn: Callable[[str, ExceptionKind, Observation | None, Exception], None]) -> None`
+  例外ハンドラを設定する。
+
+* `get_stat(tag: str) -> ConditionStat`
+  指定タグの統計情報を返す。
+
+#### Properties
+
+* `violation: bool`
+  いずれかの違反が存在するかを返す。
+
+* `global_violation: bool`
+  グローバルな違反が存在するかを返す。
+
+* `local_violation: bool`
+  ローカルな違反が存在するかを返す。
+
+* `global_fail_reason: str`
+  グローバル違反の理由を返す。
+
+* `global_exception: Exception | None`
+  グローバル例外を返す。
+
+---
+
+### Class `Observation`
+
+条件ごとの詳細な観測結果を保持する。
+
+#### Fields
+
+* `count: int`
+  評価回数を保持する。
+
+* `violation: bool`
+  違反が発生したかを保持する。
+
+* `first_violation_at: int`
+  初回違反発生の試行回数を保持する。
+
+* `exc: Exception | None`
+  発生した例外を保持する。
+
+* `fail_condition: Callable[..., bool] | None`
+  違反した条件関数を保持する。
+
+* `fail_reason: str`
+  違反理由を保持する。
+
+---
+
+### Class `ConditionStat`
+
+条件の統計的な結果を簡易的に表現する。
+
+#### Constructor
 
 ```python
-create_port = policy.create_noop_port
+ConditionStat(count: int, violation: bool, first_violation_at: int)
 ```
+
+#### Properties
+
+* `count: int`
+  評価回数を返す。
+
+* `violation: bool`
+  違反が発生したかを返す。
+
+* `first_violation_at: int`
+  初回違反が発生した試行回数を返す。
+
+---
+
+### Enum `ExceptionKind`
+
+例外の発生箇所を示す。
+
+#### Constants
+
+* `ON_CONDITION` – 条件評価時に例外発生。
+* `ON_VIOLATION` – 違反ハンドラ実行時に例外発生。
+* `ON_INTERNAL` – 内部処理中に例外発生。
+
+---
+
+## テスト
+
+このモジュールはテストにpytestを用いています。  
+tests/にテストは存在します。  
+またlegacy/は無効になったテストが入っているため実行をスキップしてください。
 

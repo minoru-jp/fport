@@ -1,66 +1,54 @@
-# standman
-
-> **As of version 0.3.0, the examples in this document have not been tested for actual execution.**
-> The API and behavior may change without notice. Use at your own risk.
+# standman v1.0.0
 
 ## Overview
 
-A loosely-coupled, one-way function linkage module.
-Primarily intended for simple white-box testing.
-Also designed for creating small add-ons.
+A generic unidirectional function coupling module based on loose coupling.
 
-* **`standman`** defines factory functions and other interfaces for external use.
-* **`standman.observer`** provides an example implementation of a Listener for white-box testing.
+This module provides an interface for the implementation side to send information.
+
+## Main Purpose and Use Cases
+
+* Submitting information from the implementation side for white-box testing
+* Creating entry points for simple add-ons
+
+## Supported Environment
+
+* Python 3.10 or later
+* No external dependencies
+
+## License
+
+This module is provided under the MIT License.
+See the [LICENSE](./LICENSE) file for details.
+
+## Installation
+
+```bash
+pip install git+https://github.com/minoru_jp/standman.git
+```
 
 ## Features
 
-* Provides a way to easily insert *leak points* in the implementation (sender side) with minimal steps.
-* Provides filtering mechanisms for the content of leaks performed by the implementation.
-* The implementation side is **fail-silent**, the receiving side is **fail-fast**. Failures on the receiving side or in the framework are not propagated to the implementation, so the implementation can insert leak points without worrying about side effects.
-* The receiving side connects to the sender's `Port` interface by specifying it, and the sender can define the scope of information passed to the receiving function by how it defines the `Port` interface. → See "Examples / Minimum Configuration" below.
+* Provides a communication channel to the implementation side with minimal setup.
+* Designed so that the sending interface has no side effects on the implementation side (only computation cost on the receiving side).
+* The sending interface does not propagate errors from the receiver or framework to the implementation side.
+* The sending interface always returns `None`.
+* The scope of information transfer can be flexibly defined by where and how the interface is defined and shared.
+* You can configure the sending interface to reject connections.
+* Even if the connection is rejected, the implementation side always gets a valid interface.
 
 ## Warning
 
-* **Do not** use this framework in programs that handle personal information, authentication credentials, or any other data whose leakage would cause problems. (From the implementation side's perspective, it is equivalent to leaking information to an unknown location.)
+The communication mechanism adopted by this module is loosely coupled and does not explicitly specify the destination from the implementation side.
+Information transmitted from the implementation must be carefully considered. Careless transmission may lead to leaks of authentication data, personal information, or other critical data. The same applies to information that can be reconstructed into such sensitive data.
 
-## Examples
+## About Parallel Processing
 
-### Minimum Configuration – Set a Port per function
+The sending interface is **thread-unsafe**.
+This design avoids unintended serialization on the implementation side.
+Maintaining overall consistency, including the use of interfaces in parallel processing, is the responsibility of the implementation side.
 
-```python
-from standman import create_session_policy
-
-policy = create_session_policy()
-create_port = policy.create_port
-
-def sender():
-    port = sender._port
-    port.send("example", "sender")
-
-sender._port = create_port()
-```
-
-### Minimum Configuration – Set a Port at the class level
-
-```python
-from standman import create_session_policy
-
-policy = create_session_policy()
-create_port = policy.create_port
-
-class Foo:
-    _port = create_port()
-
-    def method(self):
-        Foo._port.send("example", "Foo.method")
-    
-class Bar(Foo):
-    def method(self):
-        super().method()
-        Foo._port.send("example", "Bar.method")
-```
-
-### Minimum Configuration – Set a Port at the module level
+## Simple Usage Example
 
 ```python
 from standman import create_session_policy
@@ -68,72 +56,313 @@ from standman import create_session_policy
 policy = create_session_policy()
 port = policy.create_port()
 
-def func1():
-    port.send("example", "func1")
+def add(a, b):
+    port.send("add", a, b)
+    return a + b
 
-def func2():
-    port.send("example", "func2")
+def listener(tag, *args, **kwargs):
+    print("Received:", tag, args, kwargs)
+
+with policy.session(listener, port) as state:
+    result = add(2, 3)
+    print("Result:", result)
+
+# Output:
+# Received: add (2, 3) {}
+# Result: 5
 ```
 
-### Example using `observer`
+---
+
+## Main API Reference
+
+### `create_session_policy(*, block_port: bool = False, message_validator: SendFunction | None = None) -> SessionPolicy`
+
+Factory function to generate a `SessionPolicy`.
+
+* **Parameters**
+
+  * `block_port: bool`
+    If `True`, all `Port`s created by this policy reject connections.
+  * `message_validator: SendFunction | None`
+    Optional validation function for sending. Called before `Port.send()`.
+    If an exception is raised, the send is rejected.
+    The exception does not propagate to the sender; instead, it is treated as a session termination.
+
+* **Returns**
+  `SessionPolicy`
+
+---
+
+### `class SessionPolicy`
+
+Interface for managing `Port` creation and session establishment.
+
+* **Methods**
+
+  * `create_port() -> Port`
+    Creates a connectable `Port`.
+
+  * `create_noop_port() -> Port`
+    Creates a no-op `Port` that rejects connections.
+
+  * `session(listener: ListenFunction, target: Port) -> ContextManager[SessionState]`
+    Returns a context manager to start a session by connecting `listener` to the specified `Port`.
+
+    * **Parameters**
+
+      * `listener: ListenFunction`
+        A callback function that receives messages sent via `Port.send()`.
+        Takes arguments `(tag: str, *args, **kwargs)`.
+      * `target: Port`
+        The target `Port` instance.
+
+    * **Returns**
+      `ContextManager[SessionState]`
+      Used in a `with` block. Provides `SessionState` for monitoring with `ok` and `error`.
+
+    * **Exceptions**
+
+      * `TypeError`: If `target` is not a `Port` instance
+      * `OccupiedError`: If the specified `Port` is already used by another session
+      * `DeniedError`: If the `Port` or `SessionPolicy` is set to reject connections
+      * `RuntimeError`: Unexpected internal inconsistencies
+
+---
+
+### `class Port`
+
+Interface for the implementation (sending side) to transmit information.
+
+* **Methods**
+
+  * `send(tag: str, *args, **kwargs) -> None`
+    Sends arbitrary information to registered listeners.
+
+    * Does nothing if no listener is registered
+    * Exceptions are not propagated to the sender (fail-silent)
+    * **Thread-unsafe**: designed to avoid unintended serialization
+
+---
+
+### `class SessionState`
+
+Read-only interface for monitoring session status.
+
+* **Properties**
+
+  * `ok: bool`
+    Whether the session is still active
+  * `error: Exception | None`
+    The first error that caused the session to end, or `None`
+
+---
+
+### Exceptions
+
+* `class DeniedError(Exception)`
+  Raised when a policy or `Port` rejects a connection.
+
+* `class OccupiedError(Exception)`
+  Raised when a `Port` is already occupied by another session.
+
+---
+
+### Protocols (Types)
+
+* `class SendFunction(Protocol)`
+
+  ```python
+  def __call__(tag: str, *args, **kwargs) -> None
+  ```
+
+  Callable object used by the sender to send messages.
+
+* `class ListenFunction(Protocol)`
+
+  ```python
+  def __call__(tag: str, *args, **kwargs) -> None
+  ```
+
+  Callable object used by the receiver to process messages.
+
+---
+
+## Observer
+
+This library includes an `observer` implementation as a listener.
+
+### Example usage with standman
 
 ```python
 from standman import create_session_policy
-from standman.observer import create_process_observer
+from standman.observer import ProcessObserver
 
-# management.py
-def message_validator(tag, *args, **kwargs):
-    if not all(isinstance(a, int) for a in (*args, *kwargs.values())):
-        raise TypeError("Sending data is int only.")
-
-policy = create_session_policy(message_validator=message_validator)
-
-# sender.py (implementation module)
-
-create_port = policy.create_port
-
-def bake_cookies(num_children):
-    port = bake_cookies._port
-    ... # process: Mom baking some cookies
-    port.send("Share nicely", num_children, len(cookies))
-    ... # process: Dad doing something
-    return cookies
-
-bake_cookies._port = create_port()
-
-# receiver.py (test module in pytest, etc.)
-def test_bake_cookies_share_nicely():
-    share_nicely = lambda ch, co: co % ch == 0
-    observer = create_process_observer({"Share nicely": share_nicely})
-
-    with policy.session(observer.listen, bake_cookies._port) as state:
-
-        bake_cookies(3)
-        
-        if state.active:
-            back_then = not observer.get_condition_stat("Share nicely").violation
-            if not share_nicely(num_children, len(cookies)):
-                if back_then:
-                    assert False, "Mom is suspicious."
-                else:
-                    assert False, "Dad is suspicious."
+def create_weather_sensor(port):
+    """Weather sensor
+    Specification:
+        temp < 0        -> "Freezing" + send("freezing")
+        0 <= temp <= 30 -> "Normal"   + send("normal")
+        temp > 30       -> "Hot"      + send("hot")
+    """
+    def check_weather(temp: int) -> str:
+        # If there is a bug here, it will be detected by the test
+        if temp <= 0:   # ← Common place to inject a bug
+            port.send("freezing", temp)
+            return "Freezing"
+        elif temp <= 30:
+            port.send("normal", temp)
+            return "Normal"
         else:
-            if state.error:
-                assert False, f"Observing failed with {state.error}"
+            port.send("hot", temp)
+            return "Hot"
+    return check_weather
+
+policy = create_session_policy()
+port = policy.create_port()
+
+# Define expected conditions according to the specification
+conditions = {
+    "freezing": lambda t: t < 0,
+    "normal":   lambda t: 0 <= t <= 30,
+    "hot":      lambda t: t > 30,
+}
+observer = ProcessObserver(conditions)
+check_weather = create_weather_sensor(port)
+
+with policy.session(observer.listen, port) as state:
+    # Test coverage for all three branches
+    for i in (-5, 0, 31):
+        check_weather(i)
+        if not state.ok:
+            raise AssertionError(f"observation failed on '{i}'")
+
+    # Verify that the Observer did not detect any specification violations
+    if observer.violation:
+        details = []
+        for tag, obs in observer.get_violated().items():
+            details.append(
+                f"[{tag}] reason={obs.fail_reason}, "
+                f"count={obs.count}, first_violation_at={obs.first_violation_at}"
+            )
+        raise AssertionError("Observer detected violations:\n" + "\n".join(details))
+
+print("All checks passed!")
 ```
 
-### Rejecting Connections and Disabling Ports
+---
 
-How to reject or disable connections to Ports at the policy level or in specific parts of the implementation.
+## Observer API Reference
 
-#### Block connections when creating the SessionPolicy
+### Class `ProcessObserver`
+
+Monitors process state, handling condition violations and exceptions.
+
+#### Constructor
 
 ```python
-policy = create_session_policy(block_port=True)
+ProcessObserver(conditions: dict[str, Callable[..., bool]])
 ```
 
-#### Specify a dispatcher for `create_port` that returns a no-op Port in the implementation
+Initializes with the given set of conditions to monitor.
+
+#### Methods
+
+* `reset_observations() -> None`
+  Reset all observation results.
+
+* `listen(tag: str, *args, **kwargs) -> None`
+  Evaluate the condition for the given tag.
+  Calls handlers on violation or exception.
+
+* `get_all() -> dict[str, Observation]`
+  Returns all observation results.
+
+* `get_violated() -> dict[str, Observation]`
+  Returns observations where violations occurred.
+
+* `get_compliant() -> dict[str, Observation]`
+  Returns observations with no violations.
+
+* `get_unevaluated() -> dict[str, Observation]`
+  Returns unevaluated observations.
+
+* `set_violation_handler(tag: str, fn: Callable[[Observation], None]) -> None`
+  Sets a violation handler for the specified tag.
+
+* `set_exception_handler(fn: Callable[[str, ExceptionKind, Observation | None, Exception], None]) -> None`
+  Sets an exception handler.
+
+* `get_stat(tag: str) -> ConditionStat`
+  Returns statistical information for the specified tag.
+
+#### Properties
+
+* `violation: bool`
+  Whether any violation exists.
+
+* `global_violation: bool`
+  Whether any global violation exists.
+
+* `local_violation: bool`
+  Whether any local violation exists.
+
+* `global_fail_reason: str`
+  Returns the reason for the global violation.
+
+* `global_exception: Exception | None`
+  Returns the global exception, if any.
+
+---
+
+### Class `Observation`
+
+Holds detailed observation results per condition.
+
+#### Fields
+
+* `count: int` – Number of evaluations
+* `violation: bool` – Whether a violation occurred
+* `first_violation_at: int` – Trial number of the first violation
+* `exc: Exception | None` – Exception that occurred
+* `fail_condition: Callable[..., bool] | None` – Condition function that failed
+* `fail_reason: str` – Reason for the violation
+
+---
+
+### Class `ConditionStat`
+
+Simplified statistical representation of condition results.
+
+#### Constructor
 
 ```python
-create_port = policy.create_noop_port
+ConditionStat(count: int, violation: bool, first_violation_at: int)
 ```
+
+#### Properties
+
+* `count: int` – Number of evaluations
+* `violation: bool` – Whether a violation occurred
+* `first_violation_at: int` – Trial number of the first violation
+
+---
+
+### Enum `ExceptionKind`
+
+Indicates where an exception occurred.
+
+#### Constants
+
+* `ON_CONDITION` – Exception during condition evaluation
+* `ON_VIOLATION` – Exception during violation handler execution
+* `ON_INTERNAL` – Exception during internal processing
+
+---
+
+## Testing
+
+This module uses `pytest` for testing.
+Tests are located in the `tests/` directory.
+The `legacy/` directory contains disabled tests and should be skipped.
+

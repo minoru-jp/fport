@@ -31,7 +31,9 @@ from .session import SessionState
 from .protocols import SendFunction, ListenFunction
 from .exceptions import DeniedError, OccupiedError
 
-__version__ = '0.3.0'
+from .observer import ProcessObserver
+
+__version__ = '1.0.0'
 
 __all__ = (
     'SessionPolicy', 'create_session_policy',
@@ -64,6 +66,61 @@ def example():
     # Output:
     # Received: add, args=(2, 3), kwargs={}
     # Result: 5
+
+
+def example_with_observer():
+
+    def create_weather_sensor(port):
+        """Weather sensor
+        Specification:
+            temp < 0        -> "Freezing" + send("freezing")
+            0 <= temp <= 30 -> "Normal"   + send("normal")
+            temp > 30       -> "Hot"      + send("hot")
+        """
+        def check_weather(temp: int) -> str:
+            # If there is a bug here, it will be detected by the test
+            if temp <= 0:   # ← Common place to inject a bug
+                port.send("freezing", temp)
+                return "Freezing"
+            elif temp <= 30:
+                port.send("normal", temp)
+                return "Normal"
+            else:
+                port.send("hot", temp)
+                return "Hot"
+        return check_weather
+
+    policy = create_session_policy()
+    port = policy.create_port()
+
+    # Define expected conditions according to the specification
+    conditions = {
+        "freezing": lambda t: t < 0,
+        "normal":   lambda t: 0 <= t <= 30,
+        "hot":      lambda t: t > 30,
+    }
+    observer = ProcessObserver(conditions)
+    check_weather = create_weather_sensor(port)
+
+    with policy.session(observer.listen, port) as state:
+        # Test coverage for all three branches
+        for i in (-5, 0, 31):
+            check_weather(i)
+            if not state.ok:
+                raise AssertionError(f"observation failed on '{i}'")
+
+        # Verify that the Observer did not detect any specification violations
+        if observer.violation:
+            details = []
+            for tag, obs in observer.get_violated().items():
+                details.append(
+                    f"[{tag}] reason={obs.fail_reason}, "
+                    f"count={obs.count}, first_violation_at={obs.first_violation_at}"
+                )
+            raise AssertionError("Observer detected violations:\n" + "\n".join(details))
+    
+    print("All checks passed!")
+
 
 if __name__ == "__main__":
     example()
