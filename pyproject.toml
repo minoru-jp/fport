@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "standman"
-version = "0.2.0"
+version = "1.0.0"
 description = "Loosely-coupled, one-way function wiring for white-box testing and simple add-ons."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
