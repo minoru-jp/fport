@@ -1,7 +1,7 @@
 # tests/port/test_noop_port.py
 import pytest
-from standman.port import _create_noop_port
-from standman.exceptions import DeniedError
+from fport.port import _create_noop_port
+from fport.exceptions import DeniedError
 
 class FakeBridge:
     """Minimal fake bridge to provide control/entry permits."""

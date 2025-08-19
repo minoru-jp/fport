@@ -1,12 +1,12 @@
-import standman.policy
-from standman.session import SessionState
+import fport.policy
+from fport.session import SessionState
 import threading
 import time
 
 def test_massive_concurrent_send_stress():
     """Stress test: Port.send under heavy concurrent load must not break session integrity."""
 
-    policy = standman.policy.create_session_policy()
+    policy = fport.policy.create_session_policy()
     port = policy.create_port()
 
     received = []

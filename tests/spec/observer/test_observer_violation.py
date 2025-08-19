@@ -1,4 +1,4 @@
-from standman.observer import ProcessObserver, ExceptionKind
+from fport.observer import ProcessObserver, ExceptionKind
 
 def test_process_observer_condition_violation():
     """When a condition returns False, it should be marked as violation."""

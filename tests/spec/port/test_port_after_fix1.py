@@ -1,12 +1,12 @@
-import standman.policy
-from standman.port import Port
-from standman.session import SessionState
+import fport.policy
+from fport.port import Port
+from fport.session import SessionState
 
 def test_port_state_error_is_cleared_after_session_end():
     """Port internal state.error must be cleared when the session ends."""
 
     # Get the role directly so we can access the factory
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
 
     # Create a port role via factory (not via core.create_port)
@@ -37,7 +37,7 @@ def test_port_state_error_is_cleared_after_session_end():
 def test_port_can_be_reconnected_after_session_end():
     """A Port must allow a new session after the previous one has ended."""
 
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
     port = core.create_port()
 
@@ -71,7 +71,7 @@ def test_port_can_be_reconnected_after_session_end():
 def test_reconnect_after_error_in_first_session():
     """A Port must be reusable even if the first session ended with an error."""
 
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
     port = core.create_port()
 

@@ -1,4 +1,4 @@
-from standman import example
+from fport import example
 
 def test_example_prints_expected_output(capsys):
     """example() should run without errors and print expected messages."""

@@ -33,7 +33,7 @@ from .exceptions import DeniedError, OccupiedError
 
 from .observer import ProcessObserver
 
-__version__ = '1.0.0'
+__version__ = '1.0.3'
 
 __all__ = (
     'SessionPolicy', 'create_session_policy',

@@ -1,4 +1,8 @@
-# standman v1.0.0
+# fport
+
+## バージョン
+
+[![PyPI version](https://img.shields.io/pypi/v/fport.svg)](https://pypi.org/project/fport/)
 
 ## 概要
 
@@ -24,8 +28,14 @@
 
 ## インストール
 
+PyPI
 ```bash
-pip install git+https://github.com/minoru_jp/standman.git
+pip install fport
+```
+
+GitHub
+```bash
+pip install git+https://github.com/minoru_jp/fport.git
 ```
 
 ## 特徴
@@ -52,7 +62,7 @@ pip install git+https://github.com/minoru_jp/standman.git
 ## 簡単な使用例
 
 ```python
-from standman import create_session_policy
+from fport import create_session_policy
 
 policy = create_session_policy()
 port = policy.create_port()
@@ -193,11 +203,11 @@ with policy.session(listener, port) as state:
 
 このライブラリはリスナーの実装としてobserverを含みます。
 
-### standmanと併用をした際の使用例
+### fportと併用をした際の使用例
 
 ```python
-from standman import create_session_policy
-from standman.observer import ProcessObserver
+from fport import create_session_policy
+from fport.observer import ProcessObserver
 
 def create_weather_sensor(port):
     """Weather sensor

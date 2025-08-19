@@ -1,11 +1,11 @@
-import standman.policy
-from standman.session import SessionState
+import fport.policy
+from fport.session import SessionState
 import threading
 
 def test_send_does_not_interfere_with_concurrent_processing():
     """Concurrent use of port.send must not serialize or break session state."""
 
-    policy = standman.policy.create_session_policy()
+    policy = fport.policy.create_session_policy()
     port = policy.create_port()
 
     received = []

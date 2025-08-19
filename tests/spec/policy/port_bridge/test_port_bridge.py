@@ -1,9 +1,9 @@
-import standman.policy
-from standman.session import Session
+import fport.policy
+from fport.session import Session
 
 def test_portbridge_returns_state_values():
     """_PortBridge methods must return values from state consistently."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     state = role.state
     bridge = role.port_bridge
     core = role.core

@@ -1,11 +1,11 @@
-import standman.policy
-from standman.port import Port
-from standman.session import SessionState
+import fport.policy
+from fport.port import Port
+from fport.session import SessionState
 
 def test_role_contains_factory():
     """SessionPolicy role must provide a factory with create_port and create_noop_port."""
 
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
 
     # role must have a factory attribute
     assert hasattr(role, "factory")
@@ -30,7 +30,7 @@ def test_role_contains_factory():
 def test_factory_create_port_and_noop_differences():
     """factory.create_port returns a role, while create_noop_port returns only a Port."""
 
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     factory = role.kernel
 
     # Normal port role
@@ -47,7 +47,7 @@ def test_factory_create_port_and_noop_differences():
 def test_factory_created_port_can_be_used_in_session():
     """A port created through factory must work correctly with core.session."""
 
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     factory = role.kernel
     core = role.core
 
@@ -70,7 +70,7 @@ def test_factory_created_port_can_be_used_in_session():
 def test_factory_created_port_error_and_reset():
     """Errors must be reflected in port_role.state during session and cleared after session end."""
 
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     factory = role.kernel
     core = role.core
 

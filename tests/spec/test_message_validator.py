@@ -1,5 +1,5 @@
-import standman.policy
-from standman.session import SessionState
+import fport.policy
+from fport.session import SessionState
 
 def test_message_validator_error_ends_session():
     """If message_validator raises, Port.send must not propagate the error but end the session."""
@@ -12,7 +12,7 @@ def test_message_validator_error_ends_session():
         raise ValidatorError("invalid message")
 
     # Create policy with validator
-    policy = standman.policy.create_session_policy(message_validator=bad_validator)
+    policy = fport.policy.create_session_policy(message_validator=bad_validator)
     port = policy.create_port()
 
     calls = []

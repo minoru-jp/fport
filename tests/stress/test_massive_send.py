@@ -1,10 +1,10 @@
-import standman.policy
-from standman.session import SessionState
+import fport.policy
+from fport.session import SessionState
 
 def test_massive_send_integrity():
     """Port.send can be called many times without breaking SessionState integrity."""
 
-    policy = standman.policy.create_session_policy()
+    policy = fport.policy.create_session_policy()
     port = policy.create_port()
 
     received = []

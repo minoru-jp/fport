@@ -1,9 +1,9 @@
 import _thread
-import standman.policy
+import fport.policy
 
 def test_state_initial_values_defaults():
     """Initial state must have clean defaults."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     state = role.state
     const = role.constant
 
@@ -28,13 +28,13 @@ def test_state_initial_values_defaults():
     assert state.entry_permit is not state.control_permit
 
 
-import standman.policy
+import fport.policy
 
 
 def test_state_instances_are_independent():
     """Each call to _create_session_policy_role() must produce an independent state object."""
-    role1 = standman.policy._create_session_policy_role()
-    role2 = standman.policy._create_session_policy_role()
+    role1 = fport.policy._create_session_policy_role()
+    role2 = fport.policy._create_session_policy_role()
 
     s1, s2 = role1.state, role2.state
 
@@ -57,7 +57,7 @@ def test_state_respects_custom_message_validator():
     def custom_validator(tag, *args, **kwargs):
         called["ok"] = True
 
-    role = standman.policy._create_session_policy_role(message_validator=custom_validator)
+    role = fport.policy._create_session_policy_role(message_validator=custom_validator)
     state = role.state
 
     # mess_validator should be a tuple of length 1

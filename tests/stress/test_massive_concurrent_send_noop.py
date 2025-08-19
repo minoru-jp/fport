@@ -1,12 +1,12 @@
-import standman.policy
-from standman.exceptions import DeniedError
+import fport.policy
+from fport.exceptions import DeniedError
 import threading
 import time
 
 def test_massive_concurrent_send_noop_stress():
     """Stress test: NoopPort.send must silently ignore all calls, even under heavy load."""
 
-    policy = standman.policy.create_session_policy(block_port=True)
+    policy = fport.policy.create_session_policy(block_port=True)
     port = policy.create_port()  # this will be a NoopPort
 
     N_THREADS = 50

@@ -1,5 +1,5 @@
 import pytest
-from standman.observer import ProcessObserver
+from fport.observer import ProcessObserver
 
 def test_process_observer_normal_pass():
     """All conditions return True -> no violation should be recorded."""

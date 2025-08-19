@@ -1,11 +1,11 @@
-import standman.policy
-from standman.port import Port
+import fport.policy
+from fport.port import Port
 import threading
 
 def test_create_port_is_thread_safe():
     """Concurrent calls to create_port must return distinct and valid Port instances."""
 
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
 
     results: list[Port] = []

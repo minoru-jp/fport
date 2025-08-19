@@ -29,7 +29,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
 ### Changed
+
+### Removed
+
+### Added
+
+
+---
+
+## [1.0.3] - 2025-08-20
+
+0.0.1-0.0.2はTestPyPIで消費
+
+### Changed
+- ライブラリ名を`fport`に変更
 
 ### Removed
 

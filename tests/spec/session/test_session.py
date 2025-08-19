@@ -1,6 +1,6 @@
 import pytest
-import standman
-from standman.session import Session, SessionState
+import fport
+from fport.session import Session, SessionState
 
 def test_session_initial_state():
     """New Session starts active with no error."""
@@ -42,7 +42,7 @@ def test_state_reader_reflects_and_is_read_only():
 
 def test_session_state_set_error_updates_ok_and_error():
     """Session.set_error() must set ok=False and store the exception in the session state."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
     port = core.create_port()
 
@@ -72,7 +72,7 @@ def test_session_state_set_error_updates_ok_and_error():
 
 def test_session_state_reflects_listener_exception():
     """If a listener raises an exception, the session state must record it and mark ok=False."""
-    policy = standman.policy.create_session_policy()
+    policy = fport.policy.create_session_policy()
     port = policy.create_port()
 
     class CustomError(Exception):

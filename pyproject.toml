@@ -3,8 +3,8 @@ requires = ["setuptools>=70", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "standman"
-version = "1.0.0"
+name = "fport"
+version = "1.0.3"
 description = "Loosely-coupled, one-way function wiring for white-box testing and simple add-ons."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
@@ -22,9 +22,14 @@ classifiers = [
 keywords = ["whitebox-testing", "testing", "observer", "add-on", "loose-coupling"]
 
 [project.urls]
-Homepage = "https://github.com/minoru-jp/standman"
-Source = "https://github.com/minoru-jp/standman"
-Issues = "https://github.com/minoru-jp/standman/issues"
+Homepage = "https://github.com/minoru-jp/fport"
+Source = "https://github.com/minoru-jp/fport"
+Issues = "https://github.com/minoru-jp/fport/issues"
+
+
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
-include = ["standman*"]
+where = ["src"]
+include = ["fport*"]

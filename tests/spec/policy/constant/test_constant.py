@@ -1,8 +1,8 @@
-import standman.policy
+import fport.policy
 
 def test_constant_has_default_message_validator():
     """role.constant must define DEFAULT_MESSAGE_VALIDATOR as a callable."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     const = role.constant
 
     # Attribute must exist

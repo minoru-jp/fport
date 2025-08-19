@@ -1,4 +1,8 @@
-# standman v1.0.0
+# fport
+
+## Version
+
+[![PyPI version](https://img.shields.io/pypi/v/fport.svg)](https://pypi.org/project/fport/)
 
 ## Overview
 
@@ -23,8 +27,14 @@ See the [LICENSE](./LICENSE) file for details.
 
 ## Installation
 
+PyPI
 ```bash
-pip install git+https://github.com/minoru_jp/standman.git
+pip install fport
+```
+
+GitHub
+```bash
+pip install git+https://github.com/minoru_jp/fport.git
 ```
 
 ## Features
@@ -51,7 +61,7 @@ Maintaining overall consistency, including the use of interfaces in parallel pro
 ## Simple Usage Example
 
 ```python
-from standman import create_session_policy
+from fport import create_session_policy
 
 policy = create_session_policy()
 port = policy.create_port()
@@ -192,11 +202,11 @@ Read-only interface for monitoring session status.
 
 This library includes an `observer` implementation as a listener.
 
-### Example usage with standman
+### Example usage with fport
 
 ```python
-from standman import create_session_policy
-from standman.observer import ProcessObserver
+from fport import create_session_policy
+from fport.observer import ProcessObserver
 
 def create_weather_sensor(port):
     """Weather sensor

@@ -1,11 +1,11 @@
 import pytest
-import standman.policy
-from standman.session import SessionState
-from standman.exceptions import DeniedError
+import fport.policy
+from fport.session import SessionState
+from fport.exceptions import DeniedError
 
 def test_session_context_registers_and_unregisters():
     """core.session() must register a session, yield a SessionState, and unregister on exit."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
     state = role.state
 
@@ -37,7 +37,7 @@ def test_session_context_registers_and_unregisters():
 
 def test_session_raises_typeerror_when_target_is_not_port():
     """core.session() must raise TypeError if target is not a Port instance."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
 
     def listener(tag: str, *args, **kwargs): pass
@@ -53,10 +53,10 @@ def test_session_raises_typeerror_when_target_is_not_port():
 
 def test_session_raises_deniederror_when_port_belongs_to_other_policy():
     """core.session() must raise DeniedError if the port was created by another policy."""
-    role1 = standman.policy._create_session_policy_role()
+    role1 = fport.policy._create_session_policy_role()
     core1 = role1.core
 
-    role2 = standman.policy._create_session_policy_role()
+    role2 = fport.policy._create_session_policy_role()
     core2 = role2.core
 
     port_from_other_policy = core2.create_port()

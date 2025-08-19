@@ -4,7 +4,7 @@
 import threading
 import time
 import pytest
-from standman.session import Session
+from fport.session import Session
 
 
 def test_set_error_is_thread_safe_first_error_kept():

@@ -1,13 +1,13 @@
 import pytest
 
-import standman.policy
-from standman.session import Session, SessionState
-from standman.exceptions import DeniedError, OccupiedError
-from standman.port import Port, _create_noop_port
+import fport.policy
+from fport.session import Session, SessionState
+from fport.exceptions import DeniedError, OccupiedError
+from fport.port import Port, _create_noop_port
 
 def test_register_and_unregister_session_success():
     """register_session must add a session and unregister_session must remove it."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     state = role.state
     core = role.core
 
@@ -37,7 +37,7 @@ def test_register_and_unregister_session_success():
 
 def test_register_session_twice_raises_occupiederror():
     """Registering twice on the same port must raise OccupiedError (normal case)."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
 
     port = core.create_port()
@@ -55,7 +55,7 @@ def test_register_session_twice_raises_occupiederror():
 def test_register_session_runtimeerror_on_inconsistent_state():
     """Force an inconsistent state so RuntimeError is raised instead of OccupiedError."""
 
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
     state = role.state
 
@@ -86,7 +86,7 @@ def test_register_session_runtimeerror_on_inconsistent_state():
 
 def test_unregister_session_not_found_raises_runtimeerror():
     """Calling unregister_session on a port that has no session must raise RuntimeError."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
 
     # Create a port but never register it
@@ -101,7 +101,7 @@ def test_unregister_session_not_found_raises_runtimeerror():
 
 def test_create_port_returns_normal_port_when_not_blocked():
     """create_port() must return a functional Port when block_port=False."""
-    role = standman.policy._create_session_policy_role(block_port=False)
+    role = fport.policy._create_session_policy_role(block_port=False)
     core = role.core
 
     port = core.create_port()
@@ -119,7 +119,7 @@ def test_create_port_returns_normal_port_when_not_blocked():
 
 def test_create_port_returns_noop_port_when_blocked():
     """create_port() must return a no-op Port when block_port=True."""
-    role = standman.policy._create_session_policy_role(block_port=True)
+    role = fport.policy._create_session_policy_role(block_port=True)
     core = role.core
 
     port = core.create_port()
@@ -134,7 +134,7 @@ def test_create_port_returns_noop_port_when_blocked():
 
 def test_create_noop_port_always_returns_noop():
     """create_noop_port() must always return a no-op Port."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
 
     port = core.create_noop_port()
@@ -150,7 +150,7 @@ def test_create_noop_port_always_returns_noop():
 
 def test_session_context_registers_and_unregisters():
     """core.session() must register a session, yield a SessionState, and unregister on exit."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
     state = role.state
 
@@ -179,7 +179,7 @@ def test_session_context_registers_and_unregisters():
 
 def test_session_raises_typeerror_when_target_is_not_port():
     """core.session() must raise TypeError if target is not a Port instance."""
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
 
     def listener(tag: str, *args, **kwargs):
@@ -199,10 +199,10 @@ def test_session_raises_typeerror_when_target_is_not_port():
 def test_session_raises_deniederror_when_port_belongs_to_other_policy():
     """core.session() must raise DeniedError if the port was created by another policy."""
     # Create two separate policies
-    role1 = standman.policy._create_session_policy_role()
+    role1 = fport.policy._create_session_policy_role()
     core1 = role1.core
 
-    role2 = standman.policy._create_session_policy_role()
+    role2 = fport.policy._create_session_policy_role()
     core2 = role2.core
 
     port_from_other_policy = core2.create_port()

@@ -1,6 +1,6 @@
 # test_example_with_observer.py
 import pytest
-from standman import example_with_observer
+from fport import example_with_observer
 
 def test_example_with_observer_detects_bug():
     # Run and check that AssertionError is raised

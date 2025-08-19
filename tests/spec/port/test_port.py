@@ -1,12 +1,12 @@
 import pytest
 import threading
 
-import standman
-from standman.port import Port, _create_port_role
-from standman.policy import _PortBridgeTOC
-from standman.exceptions import OccupiedError
-from standman.protocols import SendFunction
-from standman.session import Session, SessionState
+import fport
+from fport.port import Port, _create_port_role
+from fport.policy import _PortBridgeTOC
+from fport.exceptions import OccupiedError
+from fport.protocols import SendFunction
+from fport.session import Session, SessionState
     
 class FakeBridge(_PortBridgeTOC):
     def __init__(self):
@@ -217,7 +217,7 @@ def test_send_validator_exception_is_fail_silent_and_latched():
 def test_port_set_listen_func_after_error_is_ignored():
     """Once a Port has entered error state, setting a new listener must be ignored."""
 
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
     port = core.create_port()
 
@@ -249,7 +249,7 @@ def test_port_set_listen_func_after_error_is_ignored():
 def test_port_can_be_reused_after_session_end():
     """A Port must be reusable after a session ends."""
 
-    role = standman.policy._create_session_policy_role()
+    role = fport.policy._create_session_policy_role()
     core = role.core
     port = core.create_port()
 
