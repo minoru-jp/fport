@@ -1,0 +1,14 @@
+# プッシュとプルリクエストのたびに、checks.yml ですべての検査を走らせる。
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
