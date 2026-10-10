@@ -17,7 +17,7 @@ class PROJECT_STATUS:
     """
 
     class STATUS_001:
-        r"""現在の開発段階は Alpha。現在のバージョンは `{{project.version}}` で、PyPI にはまだ公開していない。PyPI 上の最新は、作り直す前の旧実装 `1.0.3` である。"""
+        r"""現在の開発段階は Alpha。現在のバージョンは `{{project.version}}` で、PyPI に公開している。`1.x` 系は作り直す前の旧実装で、`{{project.version}}` との互換性はない。"""
 
         title @= "Development stage"
 
@@ -53,7 +53,7 @@ class PROJECT_STATUS:
 
     class STATUS_005:
         r"""
-        すべての検査は `tools/check.py` にまとめている。`docs`(canonical document が最新で、英語の公開文書が canonical document と食い違っていない)、`format`、`lint`、`types`、`types-tests`、`tests`、`dist`(sdist と wheel を作り、`twine check --strict`、中身の検査、依存のないきれいな venv での動作確認、版がタグ・パッケージ・文書・CHANGELOG で揃っていることの確認)の 7 つで、`python tools/check.py` ですべて、名前を並べれば一部だけを実行する。これとは別に、リリースのときだけ明示して走らせる `published` がある。`docs` が通り、版が揃い、CHANGELOG のその版の項に公開日(`released_on`)があること、つまり文書がその版を公開した状態になっていることを確かめる。
+        すべての検査は `tools/check.py` にまとめている。`docs`(canonical document が最新で、英語の公開文書が canonical document と食い違っていない)、`format`、`lint`、`types`、`types-tests`、`tests`、`dist`(sdist と wheel を作り、`twine check --strict`、中身の検査、依存のないきれいな venv での動作確認、版がタグ・パッケージ・文書・CHANGELOG で揃っていることの確認)の 7 つで、`python tools/check.py` ですべて、名前を並べれば一部だけを実行する。これとは別に、リリースのワークフローの最後に走る `published` がある。`docs` が通り、版が揃い、CHANGELOG のその版の項に公開日(`released_on`)があること、つまり文書がその版を公開した状態になっていることを確かめる。
 
         検査に使う道具の版は `pyproject.toml` の extra で固定している(`ruff==0.17.0`、`basedpyright==1.40.2`、`shikumi-contrace==0.1.0`、`shikumi-devdoc==0.3.5`、`gpframe==0.1.0`、`build==1.6.1`、`twine==7.0.0`)。`dev` ですべてが入る。BasedPyright は `src`、`contract/ports`、`scripts`、`tools`、`examples` を `recommended` で、テスト・契約・文書の正本を利用側として `standard` で検査し、どちらも 0 errors / 0 warnings である。
         """
@@ -69,8 +69,6 @@ class PROJECT_STATUS:
         - `release.yml`: GitHub で Release を公開したときに、まず `checks.yml` を呼んで push 時と同じ検査を通す。続いて `python tools/check.py dist --tag <tag>` で配布物を作って確かめ(タグが `v<version>` と一致することも確かめる)、最後に `python tools/check.py published --tag <tag>` で文書が公開済みの状態になっていることを確かめてから、PyPI の Trusted Publishing で公開する。API トークンは使わない。
 
         Trusted Publishing のために、PyPI 側でこのリポジトリ、ワークフロー `release.yml`、環境 `pypi` を Trusted Publisher として登録しておく必要がある。
-
-        リリースの前には、CHANGELOG のその版の項に `released_on` を入れ、STATUS と CHANGELOG の「まだ PyPI に公開していない」という記述を公開後の状態に改め、文書を生成し直して英語の公開文書を翻訳し直す。これを済ませないと `published` で止まり、PyPI には公開されない。
         """
 
         title @= "Checks, CI and release"

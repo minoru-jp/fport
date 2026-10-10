@@ -1,4 +1,4 @@
-<!-- Published from devdocs/canonical_documents/STATUS.md sha256:2d1152a0a2dbd959fc42a0d539f71cdf06073bd98d5922be6277fdc2bf430d65. Translated from the Japanese canonical document; edit the canonical source instead of this file. -->
+<!-- Published from devdocs/canonical_documents/STATUS.md sha256:34b799495d5cc7410928d69621da6a0fe4231604dce364b12a1a650ffab35830. Translated from the Japanese canonical document; edit the canonical source instead of this file. -->
 # fport Project Status
 
 This document describes the current state of `fport` and its future direction as seen from now.
@@ -6,7 +6,7 @@ Changes that actually happened in the past belong to the CHANGELOG.
 
 ## STATUS_001
 
-The current development stage is Alpha. The current version is `2.0.0`, and it has not been published on PyPI yet. The latest release on PyPI is `1.0.3`, the old implementation from before the rebuild.
+The current development stage is Alpha. The current version is `2.0.0`, and it is published on PyPI. The `1.x` series is the old implementation from before the rebuild and is not compatible with `2.0.0`.
 
 title: Development stage
 
@@ -41,7 +41,7 @@ title: Contracts and tests
 
 ## STATUS_005
 
-Every check is gathered in `tools/check.py`. There are seven: `docs` (the canonical documents are up to date, and the English published documents do not disagree with the canonical documents), `format`, `lint`, `types`, `types-tests`, `tests` and `dist` (build an sdist and a wheel, `twine check --strict`, inspect their contents, confirm that the wheel works in a clean venv without dependencies, and confirm that the version agrees across the tag, the package, the documents and the CHANGELOG). `python tools/check.py` runs all of them, and listing names runs only some. Separately, there is `published`, which is run explicitly only at release. It confirms that `docs` passes, that the version agrees, and that the CHANGELOG entry for that version has a release date (`released_on`); that is, that the documents are in the state of having published that version.
+Every check is gathered in `tools/check.py`. There are seven: `docs` (the canonical documents are up to date, and the English published documents do not disagree with the canonical documents), `format`, `lint`, `types`, `types-tests`, `tests` and `dist` (build an sdist and a wheel, `twine check --strict`, inspect their contents, confirm that the wheel works in a clean venv without dependencies, and confirm that the version agrees across the tag, the package, the documents and the CHANGELOG). `python tools/check.py` runs all of them, and listing names runs only some. Separately, there is `published`, which runs at the end of the release workflow. It confirms that `docs` passes, that the version agrees, and that the CHANGELOG entry for that version has a release date (`released_on`); that is, that the documents are in the state of having published that version.
 
 The versions of the tools used for checking are fixed by the extras in `pyproject.toml` (`ruff==0.17.0`, `basedpyright==1.40.2`, `shikumi-contrace==0.1.0`, `shikumi-devdoc==0.3.5`, `gpframe==0.1.0`, `build==1.6.1`, `twine==7.0.0`). `dev` includes all of them. BasedPyright checks `src`, `contract/ports`, `scripts`, `tools` and `examples` in `recommended` mode, and the tests, contracts and canonical sources of the documents as users of the API in `standard` mode, both with 0 errors / 0 warnings.
 
@@ -56,8 +56,6 @@ GitHub Actions consists of three workflows.
 - `release.yml`: when a Release is published on GitHub, it first calls `checks.yml` and passes the same checks as on push. It then builds and checks the distributions with `python tools/check.py dist --tag <tag>` (also confirming that the tag matches `v<version>`), and finally confirms with `python tools/check.py published --tag <tag>` that the documents are in the published state before publishing with PyPI Trusted Publishing. No API token is used.
 
 For Trusted Publishing, this repository, the workflow `release.yml` and the environment `pypi` must be registered as a Trusted Publisher on PyPI.
-
-Before a release, set `released_on` in the CHANGELOG entry for that version, change the statements in STATUS and the CHANGELOG that it "has not been published on PyPI yet" to the state after publishing, re-render the documents, and re-translate the English published documents. Unless this is done, the release stops at `published` and nothing is published on PyPI.
 
 title: Checks, CI and release
 

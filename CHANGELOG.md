@@ -1,4 +1,4 @@
-<!-- Published from devdocs/canonical_documents/CHANGELOG.md sha256:bc2d3f030ba660dbee5f0851a8b6b811642ed87a98cf48f2cabb10d3e8b36b64. Translated from the Japanese canonical document; edit the canonical source instead of this file. -->
+<!-- Published from devdocs/canonical_documents/CHANGELOG.md sha256:97674e8979c7fdbbdc80f3e7d22c500d44e3b24011d9e3987a3712bd5e53c5c5. Translated from the Japanese canonical document; edit the canonical source instead of this file. -->
 # fport Changelog
 
 Records the changes in each version of `fport`. The versions before `2.0.0` (the `1.x` series) are the old implementation from before the rebuild, and their history is not included in this document.
@@ -9,9 +9,9 @@ Records the changes in each version of `fport`. The versions before `2.0.0` (the
 
 `1.x` grew too large, carrying authentication to protect connections to the sending point (creating and verifying a `Port` through a policy), settings for refusing connections, passing session state around, and even an Observer that watched conditions. This version keeps only the idea that was the core of `1.x`: "a sending point placed on the implementation side does not change how the implementation side behaves". Authentication within the same process is no protection, so it is not covered, and how to carry the received information and how to handle failures of the listener are left to the receiving side (and to gpframe where needed).
 
-This version has not been published on PyPI yet.
-
 version: 2.0.0
+
+released on: 2026-10-10
 
 Changed:
 

@@ -1,6 +1,13 @@
 """fport の CHANGELOG の正本。"""
 
-from shikumi_devdoc.fields.changelog import added, changed, fixed, removed, version
+from shikumi_devdoc.fields.changelog import (
+    added,
+    changed,
+    fixed,
+    released_on,
+    removed,
+    version,
+)
 from shikumi_devdoc.norms.common import canonical_source
 
 
@@ -18,11 +25,10 @@ class CHANGELOG:
         **設計から作り直した版であり、`1.x` 系との後方互換性はまったくない。** `1.x` の API はどれも残っておらず、移行の手段も用意しない。
 
         `1.x` は、送信口への接続を守るための認証(ポリシーによる `Port` の生成と照合)、接続の拒否の設定、セッションの状態の受け渡し、条件を監視する Observer までを抱えて大きくなりすぎた。この版では、`1.x` の芯だった「実装側に置いた送信口が、実装側の振る舞いを変えない」という考え方だけを残した。同じプロセスの中での認証は守りにならないので扱わず、受け取った情報の運び方やリスナーの失敗の扱いは受信側(必要なら gpframe)に任せた。
-
-        この版はまだ PyPI に公開していない。
         """
 
         version @= "2.0.0"
+        released_on @= "2026-10-10"
 
         changed @= "対象の Python バージョン範囲を `>=3.10` から `>=3.11` に変更した。"
         changed @= (
